@@ -1,0 +1,262 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mallow — voice spike</title>
+<style>
+  :root{--sky:#eef4ea;--ink:#3d4a3f;--soft:#7d8a7e;--leaf:#8fae7b;--line:#dbe3d6}
+  @media (prefers-color-scheme:dark){
+    :root{--sky:#1b211c;--ink:#dfe6da;--soft:#93a094;--leaf:#9dc086;--line:#2e372f}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--sky);color:var(--ink);
+       font:16px/1.6 ui-rounded,-apple-system,"Hiragino Maru Gothic ProN",system-ui,sans-serif;
+       display:flex;flex-direction:column;align-items:center;justify-content:center;
+       gap:1.5rem;padding:2rem;-webkit-user-select:none;user-select:none}
+  svg{width:min(320px,80vw);touch-action:none;cursor:pointer}
+  .rec ellipse,.rec circle{filter:drop-shadow(0 0 6px var(--leaf))}
+  .hint{color:var(--soft);font-size:.9rem;min-height:1.6em;text-align:center}
+  .receipt{max-width:min(520px,92vw);width:100%;border:1px solid var(--line);
+           border-radius:16px;padding:1.1rem 1.3rem;opacity:0;transition:opacity .5s ease}
+  .receipt.show{opacity:1}
+  .receipt h3{margin:0 0 .2rem;font-size:.7rem;letter-spacing:.09em;
+              text-transform:uppercase;color:var(--soft);font-weight:600}
+  .said{font-size:1.02rem;margin:.1rem 0 1rem}
+  .item{border-top:1px solid var(--line);padding:.6rem 0}
+  .item b{font-weight:600}
+  .ev{color:var(--soft);font-size:.88rem}
+  .food{font-size:.9rem;margin-top:.15rem}
+  .withheld{color:var(--soft);font-style:italic}
+  .acts{display:flex;gap:.6rem;margin-top:.9rem}
+  .fallback{max-width:min(520px,92vw);width:100%;display:flex;flex-direction:column;gap:.4rem}
+  textarea{font:inherit;width:100%;padding:.7rem .9rem;border:1px solid var(--line);
+           border-radius:14px;background:transparent;color:var(--ink);resize:vertical}
+  button{font:inherit;border:1px solid var(--line);background:transparent;color:var(--ink);
+         padding:.4rem .9rem;border-radius:999px;cursor:pointer}
+</style>
+
+<svg id="rabbit" viewBox="0 0 300 200" aria-label="hold the rabbit and speak">
+  <ellipse cx="150" cy="168" rx="120" ry="18" fill="var(--leaf)" opacity=".18"/>
+  <g id="body">
+    <ellipse cx="140" cy="138" rx="36" ry="27" fill="#fff" opacity=".95"/>
+    <circle cx="174" cy="122" r="19" fill="#fff" opacity=".95"/>
+    <ellipse cx="170" cy="97" rx="5" ry="17" fill="#fff" opacity=".95" transform="rotate(-12 170 97)"/>
+    <ellipse cx="182" cy="98" rx="5" ry="16" fill="#fff" opacity=".95" transform="rotate(6 182 98)"/>
+    <circle cx="181" cy="120" r="1.8" fill="var(--ink)"/>
+    <circle cx="108" cy="137" r="7" fill="#fff" opacity=".95"/>
+  </g>
+</svg>
+
+<p class="hint" id="hint">Hold the rabbit. Say what happened.</p>
+<!-- Functional shell for the vertical slice. NOT the UI foundation:
+     the mobile presentation layer is rebuilt from a blank canvas once the
+     approved visual sample arrives. See UI_REBUILD.md. -->
+<p class="hint" id="state" style="font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;opacity:.5">idle</p>
+<div class="receipt" id="receipt" hidden></div>
+
+<form class="fallback" id="fallback" hidden>
+  <label for="note" class="ev">Tell Mallow what happened…</label>
+  <textarea id="note" maxlength="2000" rows="3"
+            placeholder="剛剛把冬天的衣服全部寫上名字"></textarea>
+  <div class="acts"><button type="submit">Give it to Mallow</button></div>
+</form>
+
+<script>
+const $ = s => document.querySelector(s);
+let rec, chunks = [], captureId = null, fadeTimer = null;
+
+// P0-6. A press that never gets its pointerup - the finger slides off, the tab
+// is backgrounded, the browser eats the event - must not record forever.
+const MAX_RECORDING_MS = 60000;
+let maxTimer = null;
+
+// P0-2. The first press also asks for microphone permission, and that dialog
+// can outlast the press: pointerup arrives while getUserMedia is still pending,
+// so the old code started a recording nobody was holding. `holding` is the
+// truth about the finger; the recorder checks it the moment it exists.
+let holding = false;
+let starting = false;
+
+// Functional state shell only. Visual design is pending an approved sample;
+// nothing here is final styling.
+const STATES = ['idle','recording','processing','receipt','nourished','fallback_text','failure'];
+function setState(s){
+  if (!STATES.includes(s)) return;
+  document.body.dataset.state = s;
+  $('#state').textContent = s;
+}
+
+function showFallback(reason){
+  setState('fallback_text');
+  $('#fallback').hidden = false;
+  $('#hint').textContent = reason || 'Mallow could not hear that. Type it instead.';
+  captureId = captureId || crypto.randomUUID();
+}
+
+// DECISION 3: browser-native container, chosen at runtime. No encoder, no ffmpeg.
+function pickMime(){
+  for (const t of ['audio/webm;codecs=opus','audio/webm','audio/mp4','audio/ogg'])
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+  return '';
+}
+
+async function start(){
+  if (rec || starting) return;
+  starting = true;
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  } catch (e) {
+    starting = false;
+    showFallback('Mallow cannot reach the microphone. Type it instead.');
+    return;
+  }
+
+  // The permission dialog may have outlived the press. If the finger is already
+  // up, there is nothing to record: release the microphone and say so.
+  if (!holding){
+    stream.getTracks().forEach(t => t.stop());
+    starting = false;
+    setState('idle');
+    $('#hint').textContent = 'Ready now. Hold the rabbit and say what happened.';
+    return;
+  }
+
+  const mimeType = pickMime();
+  rec = new MediaRecorder(stream, mimeType ? {mimeType} : undefined);
+  chunks = [];
+  captureId = crypto.randomUUID();
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = () => { stream.getTracks().forEach(t => t.stop()); send(); };
+  rec.start();
+  starting = false;
+  $('#rabbit').classList.add('rec');
+  $('#hint').textContent = 'listening…';
+  setState('recording');
+
+  clearTimeout(maxTimer);
+  maxTimer = setTimeout(() => {
+    if (rec && rec.state !== 'inactive'){
+      $('#hint').textContent = 'That was a long one — Mallow is taking it now.';
+      stop();
+    }
+  }, MAX_RECORDING_MS);
+}
+
+function stop(){
+  clearTimeout(maxTimer);
+  if (!rec) return;                       // nothing was ever recording
+  if (rec.state !== 'inactive') rec.stop();
+  rec = null;
+  $('#rabbit').classList.remove('rec');
+  $('#hint').textContent = 'thinking…';
+  setState('processing');
+}
+
+async function send(){
+  const blob = new Blob(chunks, {type: chunks[0]?.type || 'audio/webm'});
+  const fd = new FormData();
+  fd.append('audio', blob, 'note');            // the actual blob.type travels with it
+  fd.append('capture_id', captureId);
+  fd.append('mime_type', blob.type);
+  // P0-4. A dropped connection must land in the text box, not in the console.
+  let r, d;
+  try {
+    r = await fetch('/voice', {method:'POST', body: fd});
+    d = await r.json();
+  } catch (err) {
+    showFallback('Mallow could not be reached. Type it instead.');
+    return;
+  }
+  if (!r.ok && d && d.state === 'fallback_text'){
+    showFallback('Mallow could not reach its ears. Type it instead.');
+    return;
+  }
+  render(d, r.ok);
+}
+
+$('#fallback').addEventListener('submit', async e => {
+  e.preventDefault();
+  const note = $('#note').value.trim();
+  if (!note) return;
+  setState('processing'); $('#hint').textContent = 'thinking…';
+  let r, d;
+  try {
+    r = await fetch('/voice/text', {method:'POST',
+      headers:{'content-type':'application/json'},
+      body: JSON.stringify({capture_id: captureId || crypto.randomUUID(), note})});
+    d = await r.json();
+  } catch (err) {
+    setState('failure');
+    $('#hint').textContent = 'Still cannot reach Mallow. Your words are still here.';
+    return;                                    // the textarea keeps what was typed
+  }
+  $('#fallback').hidden = true; $('#note').value = '';
+  render(d, r.ok);
+});
+
+const FOOD = {grass:'🌿 grass', carrot:'🥕 carrot', none:'recorded — no food',
+              withheld:'held — no food issued'};
+
+function render(d, ok){
+  const box = $('#receipt');
+  if (!ok){ setState('failure');
+            $('#hint').textContent = d.note || d.detail || 'Mallow could not do that just now.';
+            return; }
+  setState((d.items ?? []).some(i => i.food === 'grass' || i.food === 'carrot')
+           ? 'nourished' : 'receipt');
+  const esc = s => { const n = document.createElement('span'); n.textContent = s ?? ''; return n.innerHTML; };
+  let html = '';
+  if (d.heard) html += `<h3>Mallow heard</h3><p class="said">「${esc(d.heard)}」</p>`;
+  if ((d.items ?? []).length) html += `<h3>Saved as</h3>`;
+  for (const it of d.items ?? []){
+    html += `<div class="item"><b>${esc(it.activity)}</b>` +
+            (it.duration_minutes ? ` · ${esc(String(it.duration_minutes))} min` : '') +
+            `<div class="ev">「${esc(it.source)}」</div>` +
+            `<div class="food${it.food === 'withheld' ? ' withheld' : ''}">${FOOD[it.food]}</div></div>`;
+  }
+  if (d.withheld_fragments)
+    html += `<div class="item withheld">${d.withheld_fragments} part(s) shown but not filed.</div>`;
+  if (d.note) html += `<p class="ev" style="margin-top:.8rem">${esc(d.note)}</p>`;
+  html += `<div class="acts"><button id="nope">Not this</button>
+           <button id="again">Say again</button></div>`;
+  box.innerHTML = html;
+  box.hidden = false; requestAnimationFrame(() => box.classList.add('show'));
+  $('#hint').textContent = '';
+  $('#nope').onclick = async () => {
+    await fetch('/voice/cancel', {method:'POST', headers:{'content-type':'application/json'},
+                                  body: JSON.stringify({capture_id: d.capture_id})});
+    $('#hint').textContent = 'Recorded as cancelled. Nothing was taken back.';
+    fade();
+  };
+  $('#again').onclick = () => { fade(); $('#hint').textContent = 'Hold the rabbit. Say what happened.'; };
+  clearTimeout(fadeTimer); fadeTimer = setTimeout(fade, 9000);
+}
+
+function fade(){
+  setState('idle');
+  const box = $('#receipt');
+  box.classList.remove('show');
+  setTimeout(() => { box.hidden = true; box.innerHTML = ''; }, 500);
+  if (!$('#hint').textContent) $('#hint').textContent = 'Hold the rabbit. Say what happened.';
+}
+
+// Sensitive text must not sit in the app switcher.
+// Best-effort only. A PWA cannot claim native App Switcher protection.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden){ release(); fade(); }
+});
+
+const r = $('#rabbit');
+function release(){ holding = false; stop(); }
+
+r.addEventListener('pointerdown', e => {
+  holding = true;
+  try { r.setPointerCapture(e.pointerId); } catch (_) {}
+  start();
+});
+r.addEventListener('pointerup', release);
+r.addEventListener('pointercancel', release);
+r.addEventListener('lostpointercapture', release);
+// A press that survives the page going away is still a press that ended.
+window.addEventListener('blur', release);
+r.addEventListener('contextmenu', e => e.preventDefault());
+</script>

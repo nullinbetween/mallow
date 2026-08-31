@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="{{ html_lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f4f1e8">
+<title>{{ t('records_title') }}</title>
+<!--
+  The private record layer.
+
+  Everything here is the person's own. Nothing on this page is sent anywhere.
+  The export is a plain, user-requested copy of your own notes in a common
+  format, for personal reference or for sharing at your own discretion.
+
+  Two languages, one template. Every label comes through `t`; the person's own
+  sentence is printed exactly as it was recorded and is never translated, in
+  either language. The whole utterance is `transcript`, shown once per capture;
+  `source_text` is the span one event rests on and is shown under it when a
+  sentence became more than one record.
+-->
+<style>
+:root{--ink:#3a382f;--soft:#6d6a5f;--line:rgba(120,110,92,.2);--paper:#f6f3ea;--card:#fffdf7}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans TC",system-ui,sans-serif;
+  padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(28px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:760px;margin:0 auto}
+.capture{margin-bottom:18px}
+.span{font-size:13px;color:var(--soft);margin:2px 0 4px;padding-left:10px;border-left:2px solid var(--line)}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:19px;font-weight:600}
+a{color:#5c7040}
+/* 🔴 Q-33. The back link used to sit in the header, top-left — one thumb-width
+ * from Safari's own Back button. The Owner kept hitting the browser's instead,
+ * which leaves the app entirely. On a 390x844 phone the top-left corner is the
+ * hardest place on the screen to reach and the most crowded with chrome that
+ * is not ours.
+ *
+ * It now floats bottom-right, inside the thumb arc, and clear of Safari's
+ * bottom bar. `env(safe-area-inset-*)` keeps it off the home indicator on a
+ * notched phone and collapses to 0 everywhere else. */
+.back{position:fixed;right:calc(16px + env(safe-area-inset-right));
+  bottom:calc(84px + env(safe-area-inset-bottom));
+  z-index:20;display:inline-flex;align-items:center;gap:6px;
+  min-height:52px;padding:0 20px;border-radius:999px;
+  background:var(--card);color:var(--ink);text-decoration:none;
+  border:1px solid var(--line);box-shadow:0 6px 20px rgba(60,50,30,.16)}
+.back:focus-visible{outline:3px solid #6b5a3c;outline-offset:3px}
+/* The floating button covers the last rows otherwise. */
+.wrap{padding-bottom:150px}
+@media (prefers-reduced-motion: reduce){.back{transition:none}}
+.lang{margin-left:auto;min-height:44px;line-height:44px;text-decoration:none;font-size:13px}
+.lede{color:var(--soft);font-size:13.5px;margin:8px 0 18px;max-width:60ch}
+.demo{display:inline-block;font-size:11px;letter-spacing:.06em;padding:4px 10px;
+  border-radius:999px;background:#6b5a3c;color:#fdfbf6;margin-bottom:14px}
+
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.tools a{min-height:44px;display:inline-flex;align-items:center;padding:0 16px;
+  border:1px solid var(--line);border-radius:12px;background:var(--card);
+  text-decoration:none;color:var(--ink)}
+.tools a:focus-visible{outline:3px solid #6f8a4e;outline-offset:2px}
+
+.rec{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:14px 16px;margin-bottom:10px}
+.rec.gone{opacity:.55}
+.capture-actions{display:flex;justify-content:flex-end;margin-top:6px}
+.remove-entry{min-height:44px;padding:0 12px;border:0;background:none;
+  color:var(--soft);font:13px/1 inherit;text-decoration:underline;
+  text-decoration-color:rgba(109,106,95,.38);text-underline-offset:3px;cursor:pointer}
+.remove-entry:focus-visible{outline:3px solid #6f8a4e;outline-offset:2px;border-radius:8px}
+.said{font-size:15.5px;margin-bottom:6px}
+.said q{quotes:"「" "」"}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--soft)}
+.tag{border:1px solid var(--line);border-radius:999px;padding:1px 9px}
+.food-grass{background:#e9efdc}
+.food-carrot{background:#f6e6d2}
+.food-none,.food-withheld{background:#eeece6}
+.empty{color:var(--soft);padding:26px 0}
+footer{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);
+  color:var(--soft);font-size:12.5px;max-width:70ch}
+code{font-size:12px;background:#eeeadd;padding:1px 5px;border-radius:5px}
+.who{background:var(--card);border:1px solid var(--line);border-radius:14px;
+  padding:12px 14px;margin-bottom:16px;font-size:13.5px;color:var(--soft);
+  line-height:1.65;max-width:70ch}
+.who strong{color:var(--ink)}
+.cta{min-height:44px;margin-top:8px;display:inline-flex;align-items:center;
+  padding:0 16px;border:1px solid var(--line);border-radius:12px;background:#e9efdc;
+  color:var(--ink);font:inherit;cursor:pointer}
+.cta.ghost{background:var(--card)}
+.tools button{min-height:44px;display:inline-flex;align-items:center;padding:0 16px;
+  border:1px solid var(--line);border-radius:12px;background:var(--card);
+  color:var(--ink);font:inherit;cursor:pointer}
+.tools .quiet{opacity:.65;font-size:13px}
+.note{font-size:13px;color:var(--soft);margin:-8px 0 18px;max-width:70ch}
+.totals{margin:0 0 18px;padding:13px 14px;background:rgba(255,253,247,.7);
+  border:1px solid var(--line);border-radius:14px}
+.totals h2{font-size:14px;font-weight:600;margin-bottom:8px}
+.total-row{display:flex;gap:8px;flex-wrap:wrap}
+.total{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;
+  border-radius:999px;border:1px solid var(--line);background:var(--card)}
+.total.grass{background:#e9efdc}.total.carrot{background:#f6e6d2}.total.leaf{background:#f4eed9}
+.totals small{display:block;color:var(--soft);margin-top:7px}
+.totals h2{display:inline-flex;align-items:center;gap:8px}
+.remove-dialog[hidden]{display:none}
+.remove-dialog{position:fixed;inset:0;z-index:50;display:flex;align-items:flex-end;
+  justify-content:center;background:rgba(60,50,30,.34)}
+.remove-box{width:100%;max-width:520px;background:var(--card);color:var(--ink);
+  border-radius:20px 20px 0 0;padding:22px 20px
+  calc(22px + env(safe-area-inset-bottom));box-shadow:0 -8px 32px rgba(60,50,30,.22)}
+.remove-box h2{font-size:17px;margin-bottom:8px}.remove-box p{color:var(--soft)}
+.remove-buttons{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+.remove-buttons button{min-height:46px;padding:0 18px;border:1px solid var(--line);
+  border-radius:999px;background:var(--card);color:var(--ink);font:inherit;cursor:pointer}
+.remove-buttons .remove-confirm{background:#e9efdc}
+.remove-buttons button:disabled{opacity:.5;cursor:default}
+.remove-error{margin-top:12px;color:#765447 !important}
+@media (min-width:560px){.remove-dialog{align-items:center}.remove-box{border-radius:20px}}
+/* The mark is 28px of ink inside a 44px target: small enough to ignore when
+   you already know, large enough to hit with a thumb when you do not. */
+.what{width:44px;height:44px;margin:-8px 0 -8px -8px;padding:0;border:0;
+  background:none;color:var(--soft);font:600 15px/1 inherit;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center}
+.what span{display:flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;border:1.5px solid currentColor}
+.legend[hidden]{display:none}
+.legend{position:fixed;inset:0;z-index:40;display:flex;align-items:flex-end;
+  justify-content:center;background:rgba(60,50,30,.34)}
+.legend-box{width:100%;max-width:520px;max-height:82vh;overflow-y:auto;
+  background:var(--card);color:var(--ink);
+  border-radius:20px 20px 0 0;padding:22px 20px
+  calc(22px + env(safe-area-inset-bottom));
+  box-shadow:0 -8px 32px rgba(60,50,30,.22)}
+.legend-box h3{font-size:16px;margin-bottom:14px}
+.legend-box p{margin:0 0 12px;line-height:1.65}
+.legend-box .note{color:var(--soft)}
+.legend-box button{width:100%;min-height:48px;margin-top:6px;border:0;
+  border-radius:999px;background:var(--ink);color:var(--card);
+  font:600 15px/1 inherit;cursor:pointer}
+@media (min-width:560px){.legend{align-items:center}
+  .legend-box{border-radius:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>{{ t('records_h1') }}</h1>
+    <a class="lang" href="/records?lang={{ other_lang }}"
+       lang="{{ other_lang }}" aria-label="{{ t('switch_label') }}">{{ t('switch_to') }}</a>
+  </header>
+
+  {% if demo %}<div class="demo">{{ t('demo_banner') }}</div>{% endif %}
+
+  <div class="who">
+    {% if who.is_anonymous %}
+      <button type="button" id="leaveAnonymous" class="cta ghost">{{ t('account_leave') }}</button>
+    {% else %}
+      <span id="signedInAs">{{ t('signed_in') }}</span>
+      <button type="button" id="signout" class="cta ghost">{{ t('sign_out') }}</button>
+    {% endif %}
+    <button type="button" id="authRetry" class="cta" hidden>{{ t('auth_retry') }}</button>
+    {% if not who.is_anonymous %}
+      <br>
+      {% if cross_device %}{{ t('cross_device_yes') }}{% else %}{{ t('cross_device_no') }}{% endif %}
+    {% endif %}
+  </div>
+
+  <p class="lede">{{ t('records_lede') }}</p>
+
+  <section class="totals" aria-labelledby="totalsTitle">
+    <h2 id="totalsTitle">{{ t('meadow_totals') }}
+      <button type="button" class="what" id="whatOpen" aria-expanded="false"
+              aria-controls="legend" aria-label="{{ t('legend_open') }}"
+      ><span aria-hidden="true">?</span></button>
+    </h2>
+    <div class="total-row">
+      <span class="total grass">🌿 {{ t('total_grass', n=totals.grass) }}</span>
+      <span class="total carrot">🥕 {{ t('total_carrot', n=totals.carrot) }}</span>
+      <span class="total leaf">🍃 {{ t('total_leaves', n=totals.leaves) }}</span>
+    </div>
+    <small>{{ t('totals_note') }}</small>
+  </section>
+
+  <div class="tools">
+    <a href="/export.pdf?lang={{ lang }}">{{ t('download_pdf') }}</a>
+    <a href="/export.csv">{{ t('download_csv') }}</a>
+    <a href="/export.json" class="quiet">JSON</a>
+  </div>
+  <p class="note" id="pageNote" hidden></p>
+
+  {% if not groups %}
+    <p class="empty">{{ t('empty') }}</p>
+  {% endif %}
+
+  {% for g in groups %}
+  <div class="capture" data-capture-id="{{ g.capture_id }}">
+    {# 🔴 The whole sentence, once. This used to print `source_text` per row —
+       the span one event rests on — so a sentence that carried a feeling and a
+       piece of work came back as the work alone. #}
+    <div class="said"><q>{{ g.transcript }}</q></div>
+    {% for r in g.events %}
+  <div class="rec {% if r.review_status in ('cancelled','superseded') %}gone{% endif %}">
+    {% if g.events|length > 1 or r.source_text != g.transcript %}
+    <div class="span">{{ r.source_text }}</div>
+    {% endif %}
+    <div class="meta">
+      <span class="tag food-{{ r.policy_result }}">
+        {% if r.policy_result == 'grass' %}{{ t('food_grass') }}
+        {% elif r.policy_result == 'carrot' %}{{ t('food_carrot') }}
+        {% elif r.policy_result == 'none' %}{{ t('food_none') }}
+        {% else %}{{ t('food_withheld') }}{% endif %}
+      </span>
+      <span>{{ r.activity_text }}</span>
+      {% if r.occurred_at %}
+        {% set clock = r.occurred_at|canonical_clock %}
+        {% if clock %}<span>{{ t('occurred_time', time=clock) }}</span>
+        {% else %}<span>{{ t('time_description', time=r.occurred_at) }}</span>{% endif %}
+      {% endif %}
+      {% if r.duration_minutes %}<span>{{ t('minutes_said', n=r.duration_minutes) }}</span>
+      {% else %}<span>{{ t('no_minutes') }}</span>{% endif %}
+      <span>{{ t('recorded_time', time=r.recorded_at|display_timestamp(lang, display_timezone)) }}</span>
+      <span class="tag">{{ r.provenance }}</span>
+      {% if r.review_status != 'active' %}<span class="tag">{{ r.review_status }}</span>{% endif %}
+      {% if r.supersedes %}<span class="tag">{{ t('supersedes', id=r.supersedes[:8]) }}</span>{% endif %}
+    </div>
+  </div>
+    {% endfor %}
+    {% if g.capture_id and g.record_ids %}
+    <div class="capture-actions">
+      <button type="button" class="remove-entry"
+              data-capture-id="{{ g.capture_id }}"
+              data-record-ids='{{ g.record_ids|tojson }}'>{{ t('remove_capture') }}</button>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <footer>
+    {{ t('claim') }}
+    {{ t('claim_note') }}<br>
+    {{ t('audio_note') }}<br>
+    {{ t('nature') }}
+    {% if cross_device %}{{ t('where_firestore') }}{% else %}{{ t('where_local') }}{% endif %}
+  </footer>
+
+<div class="remove-dialog" id="removeDialog" hidden role="dialog" aria-modal="true"
+     aria-labelledby="removeTitle" aria-describedby="removeBody">
+  <div class="remove-box">
+    <h2 id="removeTitle">{{ t('remove_title') }}</h2>
+    <p id="removeBody">{{ t('remove_body') }}</p>
+    <p class="remove-error" id="removeError" hidden></p>
+    <div class="remove-buttons">
+      <button type="button" id="removeKeep">{{ t('remove_keep') }}</button>
+      <button type="button" id="removeConfirm" class="remove-confirm">{{ t('remove_confirm') }}</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/auth.js"></script>
+<script>
+"use strict";
+const S = {{ script_strings | tojson }};
+const $ = s => document.querySelector(s);
+const note = (t) => { const n = $("#pageNote"); n.textContent = t; n.hidden = false; };
+
+const mallowReady = window.Mallow.boot()
+  .then(r => { if ($("#signedInAs") && r && r.email) {
+                 $("#signedInAs").textContent =
+                   S.account_signed_as.replace("{email}", r.email);
+               }
+               if (r && r.signedIn && r.sessionReady === false) {
+                 note(S.auth_session_failed);
+                 if ($("#authRetry")) $("#authRetry").hidden = false;
+               }
+               return r; })
+  .catch(() => null);
+
+async function connectSessionHere() {
+  note(S.auth_connecting);
+  let ok = false;
+  try { ok = await window.Mallow.startSession(); } catch (e) { ok = false; }
+  if (!ok) {
+    note(S.auth_session_failed);
+    const r = $("#authRetry");
+    if (r) { r.hidden = false; r.disabled = false; }
+    return false;
+  }
+  location.reload();                        // 🔴 only after the cookie exists
+  return true;
+}
+
+if ($("#authRetry")) $("#authRetry").onclick = () => {
+  $("#authRetry").disabled = true;          // 🚫 never re-opens the popup
+  connectSessionHere();
+};
+
+if ($("#leaveAnonymous")) $("#leaveAnonymous").onclick = async () => {
+  $("#leaveAnonymous").disabled = true;
+  try {
+    await window.Mallow.signOut();
+  } catch (e) {
+    note(S.auth_signout_failed);
+    $("#leaveAnonymous").disabled = false;
+    return;
+  }
+  location.assign("/?lang={{ lang }}");
+};
+if ($("#signout")) $("#signout").onclick = async () => {
+  $("#signout").disabled = true;
+  try {
+    await window.Mallow.signOut();
+  } catch (e) {
+    note(S.auth_signout_failed);
+    $("#signout").disabled = false;
+    return;
+  }
+  location.reload();
+};
+
+/* Removal is capture-level: one sentence and every event Mallow split from it.
+   Nothing disappears from the page until the server confirms the append-only
+   cancellation. A network error therefore leaves the visible truth alone. */
+const removeDialog = $("#removeDialog");
+const removeKeep = $("#removeKeep");
+const removeConfirm = $("#removeConfirm");
+const removeError = $("#removeError");
+let removeTarget = null;
+let removeBusy = false;
+const REMOVE_TRIES = 3;
+const REMOVE_REQUEST_MS = 2500;
+
+function showRemove(button){
+  removeTarget = button;
+  removeError.hidden = true;
+  removeError.textContent = "";
+  removeDialog.hidden = false;
+  removeConfirm.focus({preventScroll:true});
+}
+function hideRemove(){
+  if(removeBusy) return;
+  removeDialog.hidden = true;
+  const back = removeTarget;
+  removeTarget = null;
+  if(back && document.contains(back)) back.focus({preventScroll:true});
+}
+document.querySelectorAll(".remove-entry").forEach(button => {
+  button.addEventListener("click", () => showRemove(button));
+});
+removeKeep.addEventListener("click", hideRemove);
+removeDialog.addEventListener("click", e => { if(e.target === removeDialog) hideRemove(); });
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && !removeDialog.hidden) hideRemove();
+});
+
+async function requestRemoval(payload){
+  // The endpoint is idempotent. A short retry covers a phone briefly losing
+  // signal, while the per-attempt cutoff keeps the confirmation sheet from
+  // holding somebody for ever. No response is ever treated as success.
+  for(let attempt = 0; attempt < REMOVE_TRIES; attempt++){
+    const controller = new AbortController();
+    const cutoff = setTimeout(() => controller.abort(), REMOVE_REQUEST_MS);
+    try{
+      const r = await window.Mallow.mallowFetch("/voice/discard", {
+        method:"POST", keepalive:true, signal:controller.signal,
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(payload),
+      });
+      const out = await r.json().catch(() => ({}));
+      if(r.ok && out.state === "discarded") return true;
+    }catch(e){}
+    finally{ clearTimeout(cutoff); }
+    if(attempt < REMOVE_TRIES - 1){
+      await new Promise(done => setTimeout(done, 400 * (attempt + 1)));
+    }
+  }
+  return false;
+}
+
+removeConfirm.addEventListener("click", async () => {
+  if(!removeTarget || removeBusy) return;
+  removeBusy = true;
+  removeKeep.disabled = true;
+  removeConfirm.disabled = true;
+  removeConfirm.textContent = S.remove_working;
+  removeError.hidden = true;
+  try{
+    await mallowReady;
+    const recordIds = JSON.parse(removeTarget.dataset.recordIds || "[]");
+    const removed = await requestRemoval({capture_id:removeTarget.dataset.captureId,
+                                          record_ids:recordIds});
+    if(!removed) throw new Error("discard unconfirmed");
+    location.reload();
+    return;
+  }catch(e){
+    removeError.textContent = S.remove_failed;
+    removeError.hidden = false;
+  }
+  removeBusy = false;
+  removeKeep.disabled = false;
+  removeConfirm.disabled = false;
+  removeConfirm.textContent = {{ t('remove_confirm') | tojson }};
+});
+</script>
+</div>
+<div class="legend" id="legend" hidden role="dialog" aria-modal="true"
+     aria-labelledby="legendTitle">
+  <div class="legend-box">
+    <h3 id="legendTitle">{{ t('legend_title') }}</h3>
+    <p>{{ t('legend_grass') }}</p>
+    <p>{{ t('legend_carrot') }}</p>
+    <p>{{ t('legend_leaf') }}</p>
+    <p class="note">{{ t('legend_note') }}</p>
+    <button type="button" id="legendClose">{{ t('legend_close') }}</button>
+  </div>
+</div>
+<script>
+(function(){
+  var open = document.getElementById("whatOpen"),
+      box  = document.getElementById("legend"),
+      shut = document.getElementById("legendClose");
+  if(!open || !box || !shut) return;
+  function show(on){
+    box.hidden = !on;
+    open.setAttribute("aria-expanded", on ? "true" : "false");
+    (on ? shut : open).focus({preventScroll:true});
+  }
+  open.addEventListener("click", function(){ show(true); });
+  shut.addEventListener("click", function(){ show(false); });
+  // Tapping the dimmed area closes it; tapping the panel itself does not.
+  box.addEventListener("click", function(e){ if(e.target === box) show(false); });
+  document.addEventListener("keydown", function(e){
+    if(e.key === "Escape" && !box.hidden) show(false);
+  });
+})();
+</script>
+<a class="back" href="/?lang={{ lang }}">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 12H5"></path><path d="M12 19l-7-7 7-7"></path>
+  </svg>{{ t('back') }}</a>
+</body>
+</html>

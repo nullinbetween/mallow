@@ -1,0 +1,226 @@
+{
+  "provenance": "clean-room. Every line below was written for this evaluation set. No line is transcribed from, adapted from, or shaped by any real person's speech or records.",
+  "authored": "2026-08-22",
+  "purpose": "Spike acceptance C-H. Also serves as the schema-failure and replay fixture set required by F4.",
+  "language": "zh-Hant Mandarin and synthetic Cantonese-English code-mix",
+  "single_event": [
+    {
+      "id": "u01",
+      "said": "剛剛把孩子冬天的衣服全部寫上名字，弄了三十五分鐘。",
+      "expect": {
+        "events": 1,
+        "kind": "invisible_chore",
+        "domain": "clothing_laundry",
+        "duration": 35
+      }
+    },
+    {
+      "id": "u02",
+      "said": "整個下午都在想孩子到底要選哪一間診所，還沒決定。",
+      "expect": {
+        "events": 1,
+        "kind": "mental_load",
+        "domain": "health_admin",
+        "duration": null
+      }
+    },
+    {
+      "id": "u03",
+      "said": "煮了晚飯。",
+      "expect": {
+        "events": 1,
+        "kind": "recognised_work",
+        "domain": "food_preparation",
+        "duration": null
+      }
+    }
+  ],
+  "multi_event": [
+    {
+      "id": "u04",
+      "said": "今天把櫃子裡的東西歸位，順便補了衛生紙，然後一直記著後天要交回條。",
+      "expect": {
+        "events": 3,
+        "kinds": [
+          "invisible_chore",
+          "invisible_chore",
+          "mental_load"
+        ],
+        "domains": [
+          "household_upkeep",
+          "shopping_restocking",
+          "school_community"
+        ]
+      }
+    },
+    {
+      "id": "u05",
+      "said": "早上替孩子打電話問了兩間診所，下午又把餐具全部收好。",
+      "expect": {
+        "events": 2
+      }
+    }
+  ],
+  "no_duration": [
+    {
+      "id": "u06",
+      "said": "一直在記著孩子學校那張表什麼時候到期。",
+      "expect": {
+        "duration": null,
+        "occurred_at": null
+      }
+    }
+  ],
+  "code_mix": [
+    {
+      "id": "u09",
+      "said": "幫孩子label晒啲school clothes，thirty-five minutes",
+      "expect": {
+        "events": 1,
+        "kind": "invisible_chore",
+        "domain": "clothing_laundry",
+        "duration": 35,
+        "verbatim_code_mix": true
+      }
+    },
+    {
+      "id": "u10",
+      "said": "花咗20 minutes比較兩間clinic俾小朋友",
+      "expect": {
+        "events": 1,
+        "kind": "mental_load",
+        "domain": "health_admin",
+        "duration": 20,
+        "verbatim_code_mix": true
+      }
+    }
+  ],
+  "unclassifiable": [
+    {
+      "id": "u07",
+      "said": "嗯……那個……算了。",
+      "expect": {
+        "events": 0,
+        "food": "none_issued"
+      }
+    },
+    {
+      "id": "u08",
+      "said": "今天天氣很好。",
+      "expect": {
+        "events": 0,
+        "food": "none_issued"
+      }
+    }
+  ],
+  "schema_failures": [
+    {
+      "id": "s01",
+      "note": "empty activity_text",
+      "raw": {
+        "transcript": "x",
+        "events": [
+          {
+            "activity_text": "",
+            "source_text": "x",
+            "activity_domain": "other",
+            "labour_kind": "invisible_chore",
+            "duration_minutes": null,
+            "occurred_at": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "s02",
+      "note": "labour_kind outside the enum",
+      "raw": {
+        "transcript": "x",
+        "events": [
+          {
+            "activity_text": "a",
+            "source_text": "x",
+            "activity_domain": "other",
+            "labour_kind": "emotional_labour",
+            "duration_minutes": null,
+            "occurred_at": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "s03",
+      "note": "negative duration",
+      "raw": {
+        "transcript": "x",
+        "events": [
+          {
+            "activity_text": "a",
+            "source_text": "x",
+            "activity_domain": "other",
+            "labour_kind": "mental_load",
+            "duration_minutes": -5,
+            "occurred_at": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "s04",
+      "note": "duration as a string",
+      "raw": {
+        "transcript": "x",
+        "events": [
+          {
+            "activity_text": "a",
+            "source_text": "x",
+            "activity_domain": "other",
+            "labour_kind": "mental_load",
+            "duration_minutes": "35",
+            "occurred_at": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "s05",
+      "note": "one good event beside one bad fragment. The transcript is a real sentence because source_text must be a span of it — a placeholder transcript made the good event fail the traceability check too, which is not what this fixture is about.",
+      "raw": {
+        "transcript": "把東西歸位花了十分鐘，然後就忘了要做什麼。",
+        "events": [
+          {
+            "activity_text": "putting things back",
+            "source_text": "把東西歸位",
+            "activity_domain": "household_upkeep",
+            "labour_kind": "invisible_chore",
+            "duration_minutes": 10,
+            "occurred_at": null
+          },
+          {
+            "activity_text": "a",
+            "source_text": "然後就忘了要做什麼",
+            "activity_domain": "other",
+            "labour_kind": "nope",
+            "duration_minutes": null,
+            "occurred_at": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "s06",
+      "note": "events is not an array",
+      "raw": {
+        "transcript": "x",
+        "events": "two things"
+      }
+    },
+    {
+      "id": "s07",
+      "note": "transcript missing",
+      "raw": {
+        "events": []
+      }
+    }
+  ]
+}

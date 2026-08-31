@@ -1,0 +1,33 @@
+flask==3.0.3
+gunicorn==23.0.0
+# 2.19.0, checked on PyPI 2026-08-23. It was pinned at 1.0.0 — the first
+# release — through a whole rebuild. The call shapes this project uses
+# (`Client(vertexai=...)`, `models.generate_content`, `GenerateContentConfig`
+# with response_schema, `Part.from_bytes`) were verified against 2.19.0 before
+# the bump; nothing in the code changed.
+google-genai==2.19.0
+
+# Verifies Firebase ID tokens against Google's public keys. The uid a request
+# gets is the one inside a signature this library checked — never a value the
+# browser supplied. The same library verifies the OIDC token Cloud Scheduler
+# presents to the weekly task, which is a different door with a different key.
+# google-genai 2.19.0 requires google-auth >=2.56.0.  The previous 2.35.0 pin
+# made a clean install (and therefore the Docker build) fail before tests or
+# the application could start.
+google-auth==2.56.0
+
+# The decided home for records: users/{uid}/records/{record_id}. The production
+# deployment runs on Firestore. A local run defaults to the file journal unless
+# Firestore is configured, and the adapter is also covered by tests against an
+# in-memory double implementing the same client protocol.
+google-cloud-firestore==2.19.0
+
+# The readable export. The container installs WenQuanYi Zen Hei and embeds it
+# so Traditional Chinese, Latin text and digits render in the same document.
+reportlab==4.2.5
+
+# Used by google-auth's transport when Firebase and Scheduler tokens are
+# verified. Mallow itself has no third-party export destination.
+# Current stable line; includes fixes after the older 2.32.3 pin and supports
+# the current urllib3 line pulled by the Google libraries.
+requests==2.34.2

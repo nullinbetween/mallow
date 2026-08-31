@@ -1,0 +1,2209 @@
+<!doctype html>
+<html lang="{{ html_lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#8fb4d9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<!-- 🔴 The Firebase modules are a dynamic `import()` inside auth.js, so the
+     browser cannot discover them while it is parsing this document - it only
+     learns the host once the script has run, and then pays DNS + TCP + TLS to
+     a brand new origin before the first byte of the SDK. On a private window
+     with no warm connection that is the whole handshake in series with the
+     download. `preconnect` moves it to now, in parallel with everything else.
+     `crossorigin` is required: a module import is a CORS request, and a
+     preconnect opened without it is a different connection that goes unused. -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="dns-prefetch" href="https://www.gstatic.com">
+<link rel="apple-touch-icon" href="/static/icon-180.png">
+<!-- 🔴 Q-37. The first frame needs four pictures. It used to ask for eight, all
+     at once, and the two it could not use yet (2.2MB) competed for the same
+     phone connection as the ones it could. `listening` is eager on purpose:
+     it is the very next sprite a finger can ask for, and a rabbit that
+     vanishes under the thumb is worse than a rabbit that arrived late.
+
+     🔴 Q-37 r2: WebP, and it is the largest single change to first paint that
+     anyone has found here. Same nine paintings, same pixels, same visible
+     result - 3.70MB of PNG becomes 1.20MB, and these four go from 1,677KB to
+     590KB. Watercolour is what a lossy codec is good at: broad washes, soft
+     edges, no text. At q82 the rendered frame differs from the PNG render by
+     2.22 luminance levels out of 255.
+
+     No PNG fallback, deliberately. Every browser that can run this app has
+     read WebP since 2020, and a `<picture>` fallback would double the preload
+     list - the one thing this block exists to keep short. -->
+<link rel="preload" as="image" href="/art/background_day.webp">
+<link rel="preload" as="image" href="/art/rabbit_idle.webp">
+<link rel="preload" as="image" href="/art/basket.webp">
+<link rel="preload" as="image" href="/art/rabbit_listening.webp">
+<title>Mallow</title>
+<!--
+  Mallow — mobile.
+
+  Registration numbers are the ones QA measured and PRODUCT_DECISIONS 25 locked:
+  idle = 26% of stage height, silhouette-area normalised, ground line 76%,
+  basket 13%. `.anchor` is a square whose side equals the stage height, so both
+  axes inside it share one unit and nothing drifts between phone and tablet.
+
+  Two deliberate exceptions to that unit:
+    - the bubble follows screen WIDTH, because a bubble scaled by stage height
+      becomes unreadably narrow on a tablet;
+    - heights use dvh, so the mobile keyboard does not push the rabbit away.
+
+  Breathing is on the wrapper, never on the sprites: crossfade animates opacity
+  and nothing else, or the two images drift apart mid-fade.
+
+  Dialogue follows PRODUCT_DECISIONS 27 as revised by 30 — one bubble position,
+  a real textarea, no name tags, no history, no inbox.
+-->
+<style>
+:root{
+  --ink:#3d3a34; --ink-soft:#6b675e;
+  --paper:rgba(253,251,246,.94); --paper-line:rgba(120,110,92,.22);
+  --focus:#6f8a4e;
+  --t-state:300ms; --t-sky:1500ms; --t-bubble:260ms;
+  --ground:76%; --bubble-w:min(78vw,420px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none !important}
+html,body{height:100%;overflow:hidden;background:#8fb4d9;
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans TC",system-ui,sans-serif}
+body{overscroll-behavior:none}
+/* 🔴 `ready` used to be set and read by nothing at all. The comment beside it
+   said it existed to stop the first state change flashing on a cold cache;
+   nothing implemented that. It does now: until the first frame's pictures are
+   in, a state change happens instantly instead of crossfading out of a blank. */
+body:not(.ready) .bg,body:not(.ready) .sp{transition:none}
+.stage{position:relative;width:100vw;height:100dvh;overflow:clip;touch-action:manipulation}
+
+/* ---- sky ---- */
+.bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;
+    transition:opacity var(--t-sky) ease-in-out;user-select:none;-webkit-user-drag:none}
+.bg.night{opacity:0}
+body.night .bg.day{opacity:0}
+body.night .bg.night{opacity:1}
+
+/* ---- the sky that actually moves (Q-39 r2) ----
+ *
+ * 🔴 Every attempt to put weather ON TOP of this painting has failed, and this
+ * time it was measured rather than argued. Same 390x300 band of sky, same two
+ * screenshots five seconds apart in steady state, absolute luminance change
+ * out of 255:
+ *
+ *                                        mean   max   pixels changing >8
+ *     one 128%-wide veil rocking 44px    0.82     4        0.0%
+ *     two wide veils, 5-9vw travel       0.48     4        0.0%
+ *     two narrow wisps crossing the sky  0.36    18        1.5%
+ *     this                               6.50    89       20.9%
+ *
+ * A maximum of 4 levels out of 255 is not a small effect, it is no effect. The
+ * first three cannot be seen by anybody, at any brightness, on any phone.
+ *
+ * The reason every overlay failed is the artwork, not the numbers. This sky is
+ * already white clouds on pale blue, so a translucent white shape laid over it
+ * can only change luminance by a few levels before it stops looking like
+ * watercolour and starts looking like a smear. There is no opacity that is both
+ * visible and beautiful here.
+ *
+ * So nothing is laid over the sky. A second copy of the SAME image - already
+ * downloaded, already decoded, zero bytes of payload - is masked to the sky,
+ * and it is the painted clouds themselves that drift. Real edges, real
+ * contrast, and the eye reads it instantly.
+ *
+ * The mask fades out at 49% of the height, which is above the mountains, so the
+ * horizon and the meadow do not move and the rabbit is not standing on ground
+ * that slides. `background-size:cover` on a box 136% wide means the copy is
+ * very slightly larger than the original underneath; that is invisible inside
+ * the opaque part of the mask and is what gives the drift its headroom.
+ */
+#skydrift{position:absolute;left:-31%;top:0;width:162%;height:100%;z-index:0;
+  background-image:url('/art/background_day.webp');
+  background-size:cover;background-position:center;
+  -webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 30%,rgba(0,0,0,.55) 41%,transparent 49%);
+          mask-image:linear-gradient(to bottom,#000 0%,#000 30%,rgba(0,0,0,.55) 41%,transparent 49%);
+  pointer-events:none;will-change:transform;
+  transition:opacity var(--t-sky) ease-in-out;
+  animation:skydrift 96s linear infinite alternate}
+/* Opacity rather than `display:none`, so it leaves with the daylight instead of
+   being cut out of the middle of the crossfade. */
+body.night #skydrift{opacity:0}
+/* 🔴 `linear`, not `ease-in-out`, and this is the correction to my own first
+   attempt at it. At 110s ease-in-out the clouds moved 2.2px in the first nine
+   seconds - the easing spends the beginning of every cycle almost stationary,
+   which is precisely the window a person looks at when they open the app. The
+   speed that matters is the one during the ten seconds somebody is watching,
+   not the length of the cycle.
+
+   192px of travel over 96s is 2.0px per second: about 20px in the ten seconds
+   after the app opens, which is enough to read as weather. It was 72s (2.7px/s)
+   for one round and that was fast enough to read as a wallpaper sliding rather
+   than a sky moving. The box is 162% wide so there is 121px of overhang on each
+   side and the drift never exposes an edge.
+
+   🔴 `alternate` means it does eventually turn around, and clouds do not. That
+   is a known and accepted compromise: the turn comes once every 96 seconds, and
+   the alternative - a one-way loop - needs either a seam or a second asset, and
+   neither is worth paying for something almost nobody will be watching for. */
+@keyframes skydrift{from{transform:translateX(-96px)}to{transform:translateX(96px)}}
+
+/* ---- the corner clock (Q-38) ----
+ *
+ * Owner, 2026-08-25: 「兔子天空右上角應該加一個 日期＋時鐘⋯⋯我覺得有時鐘比較
+ * 方便，retention rate 也比較高」. A record-only app is not opened when there is
+ * nothing to record; one that also tells the time gets left where it can be seen.
+ *
+ * 🔴 It is a wall clock, not a timestamp. It sits in the sky, far from any
+ * record, and never appears on the records page — `occurred_at` and
+ * `recorded_at` are already two different things (PRODUCT_DECISIONS 41) and this
+ * is a third. Nothing here is ever written down.
+ */
+/* ---- Mallow Sky Tile (Q-38) ----
+ *
+ * 戰略官 spec, 2026-08-29. A small piece of fogged glass settled on the sky —
+ * not a dashboard, not a watch complication, not a white sticker.
+ *
+ * 🔴 The visual surface and the touch surface are two different things.
+ * The deputy's rejected version shrank the whole button to 12px when put away,
+ * which took the tap target down with it. `#clock` never goes below 44x44;
+ * `.clock-face` is what condenses into the dot.
+ */
+#clock{position:absolute;z-index:3;
+  top:calc(52px + env(safe-area-inset-top));
+  right:calc(16px + env(safe-area-inset-right));
+  width:76px;height:76px;padding:0;border:0;background:none;box-shadow:none;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent;
+  font-family:ui-rounded,-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  transition:top 280ms cubic-bezier(.22,.8,.25,1),
+             right 280ms cubic-bezier(.22,.8,.25,1),
+             width 280ms cubic-bezier(.22,.8,.25,1),
+             height 280ms cubic-bezier(.22,.8,.25,1)}
+#clock:focus-visible{outline:3px solid var(--focus);outline-offset:4px;border-radius:24px}
+
+.clock-face{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;width:76px;height:76px;border-radius:22px;overflow:hidden;
+  /* Day: separation from the sky, not a lid over it. */
+  background:rgba(255,255,255,.30);
+  border:1px solid rgba(255,255,255,.46);
+  backdrop-filter:blur(18px) saturate(118%);
+  -webkit-backdrop-filter:blur(18px) saturate(118%);
+  box-shadow:0 10px 30px rgba(43,79,108,.12),
+             inset 0 1px 0 rgba(255,255,255,.36);
+  color:rgba(35,49,59,.88);
+  transition:width 280ms cubic-bezier(.22,.8,.25,1),
+             height 280ms cubic-bezier(.22,.8,.25,1),
+             border-radius 280ms cubic-bezier(.22,.8,.25,1),
+             background-color 220ms ease,box-shadow 220ms ease}
+#clock:active .clock-face{transform:scale(.97)}
+
+.clock-face .t{font-size:20px;font-weight:600;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-.015em;
+  /* Optically centred: digits sit high in their box, so the pair is nudged
+     down rather than left where the maths puts it. */
+  margin-top:2px}
+/* 🔴 The date line is the one thing in this tile that is not a fixed width.
+   `Wed · 23 Sept` is 77px and the face is 76px, so a single size that suits
+   `8/29 · 六` clips English in September. The base size is the one that
+   fits the ordinary case; `fitDate()` shrinks only the days that do not, so
+   nothing is ever cut off and no day is punished for the widest one. */
+.clock-face .d{font-size:10px;font-weight:600;line-height:1;letter-spacing:0;
+  opacity:.72;white-space:nowrap;transform-origin:50% 50%}
+
+/* ---- day numerals (strategist's ruling, 2026-08-29) ----
+ * 🔴 Owner: 「至少是像玻璃一樣吧⋯⋯不是黑色」. Three candidates were tried and all
+ * three were refused, and the reason was not that they were too opaque - it was
+ * the shadows. A heavy white glyph with two or three shadows under it reads as
+ * embossed plastic or a sticker, and it also made the day and the already
+ * approved night into two different design languages.
+ *
+ * So: no shadow, no gradient fill, no stroke, no filter. The same typeface,
+ * weight and quietness as the night face, in a cool grey-blue at low opacity,
+ * so the sky reads through the numerals instead of being covered by them.
+ * Glass here is transparency, not relief.
+ *
+ * 🔴 Ceilings, if the first shot proves it too faint over a white cloud: .56
+ * for the time and .44 for the date, and nothing above that. Legibility is not
+ * to be bought back with a shadow.
+ */
+body:not(.night) .clock-face .t{color:rgba(48,76,96,.48);text-shadow:none;filter:none}
+body:not(.night) .clock-face .d{color:rgba(48,76,96,.36);opacity:1;
+  text-shadow:none;filter:none}
+
+body.night .clock-face{
+  background:rgba(10,27,49,.30);
+  border:1px solid rgba(255,255,255,.16);
+  backdrop-filter:blur(18px) saturate(112%);
+  -webkit-backdrop-filter:blur(18px) saturate(112%);
+  box-shadow:0 12px 34px rgba(0,8,20,.22),
+             inset 0 1px 0 rgba(255,255,255,.12);
+  color:rgba(246,248,251,.94)}
+body.night .clock-face .d{opacity:.70}
+
+/* ---- put away ----
+ * The face condenses toward its own centre. `#clock` shrinks to the 44x44
+ * minimum and its offsets move by exactly half the difference, so the centre
+ * of the face does not travel. The dot keeps a faint halo: it has to look
+ * like something that comes back, and not like a notification badge. */
+body.clock-off #clock{width:44px;height:44px;
+  top:calc(68px + env(safe-area-inset-top));
+  right:calc(32px + env(safe-area-inset-right))}
+body.clock-off .clock-face{width:11px;height:11px;border-radius:50%;
+  gap:0;border:1px solid rgba(255,255,255,.55);
+  background:rgba(255,255,255,.42);
+  box-shadow:0 0 0 4px rgba(255,255,255,.10),0 1px 4px rgba(43,79,108,.16)}
+body.night.clock-off .clock-face{border-color:rgba(255,255,255,.24);
+  background:rgba(226,236,248,.46);
+  box-shadow:0 0 0 4px rgba(190,214,240,.09),0 1px 5px rgba(0,8,20,.28)}
+/* Faded, not removed: `display:none` cuts a frame before the box has finished. */
+body.clock-off .clock-face .t,body.clock-off .clock-face .d{
+  opacity:0;transition:opacity 110ms ease-out}
+
+/* 🔴 Reduced motion shortens the movement. It does not disable the control. */
+@media (prefers-reduced-motion: reduce){
+  #clock,.clock-face,.clock-face .t,.clock-face .d{transition-duration:1ms}
+}
+
+/* Atmosphere is suggested visually; Mallow never plays ambient audio.  The
+   slow sky veil and tiny, asynchronous grass movements invite the eye to
+   imagine wind by day and distant crickets by night. */
+/* 🔴 Q-39. Owner, 2026-08-29: 「除了睡覺外我看不到別的東西」.
+ *
+ * All of this existed already and none of it was visible on a phone: three
+ * 18x30px blades at 18% opacity turning 0.7 degrees in total, and a sky veil at
+ * 13% opacity moving ten pixels over eighteen seconds. The deputy had read the
+ * CSS and called the feature seventy per cent done. Motion that cannot be seen
+ * is not motion, and the person looking at the screen is the instrument.
+ *
+ * Bigger, more of them, further, and asynchronous — still nothing that pulls the
+ * eye, because this is a product for people who are already carrying too much.
+ */
+#ambient{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1}
+/* 🔴 Nothing is laid over the daytime sky any more. Measured in steady state,
+   the veil that shipped changed the sky by at most 4 luminance levels out of
+   255 over five seconds, and the two-wisp replacement was no better. The
+   daytime weather moved to `#skydrift` above, where it moves the painted
+   clouds instead of covering them. Shipping an animation nobody can see is the
+   defect, not the fix. */
+/* 🔴 The blades were the wrong idea for this artwork, and bigger did not fix
+   it. Screenshot at 390px: six 27px translucent slivers in the same yellow-green
+   as the meadow, over painted grass and white flowers — gone. The first attempt
+   raised the numbers; the second looked at the picture.
+   Contrast is what gets seen here, not size. */
+/* 🔴 Night only, and that is a finding rather than a shortcut.
+ *
+ * Three attempts, three screenshots. The daytime painting is high-key
+ * everywhere — pale sky, pale mountains, bright meadow — so a light mote has no
+ * dark ground to be seen against anywhere on it. A dark mote would read as dust
+ * on the screen. The honest answer is that particles do not work by day, so
+ * they do not run by day.
+ *
+ * Daytime ambience is the breathing and the slow shift of light, both of which
+ * do read. At dusk the fireflies come out. That is a better thing for the
+ * product to say than "there are always particles, look harder".
+ */
+#ambient i{display:none}
+body.night #ambient i{position:absolute;display:block;width:7px;height:7px;border-radius:50%;
+  /* Warm, and warm on purpose: the night sky is full of cool white stars and a
+     mote has to be a different kind of light, not a brighter one. */
+  background:radial-gradient(circle,rgba(255,249,214,1) 0%,rgba(255,226,140,.72) 40%,transparent 70%);
+  will-change:transform,opacity}
+/* 🔴 In the sky, not in the meadow. Second screenshot, second lesson: the
+   meadow is painted grass, white daisies and small orange flowers at high
+   density, and a 5px dot in it is simply one more flower. The only mote that
+   could be seen in that frame was the one that happened to drift across the
+   rabbit — a clean white surface.
+
+   So the motion goes where there is room for it. `--ground` is 76%, so
+   anything below 24% from the bottom is inside the artwork; these all sit
+   above it. */
+/* 🔴 Every one of these used to be `29s` and every one of them ended 88px
+   higher than it started. Six lights rising together at the same speed is not
+   a firefly; it is a bubble, or an ember, and the Owner would have been right
+   to say so. A firefly stays in one small part of the air: it drifts a little,
+   goes out, comes back on somewhere just beside where it was.
+
+   So each one now wanders inside roughly a 30x22px box and returns to where it
+   began, on its own period between 7.5 and 12 seconds. Nothing is synchronised
+   and nothing climbs. */
+body.night #ambient i:nth-child(1){left:13%;bottom:31%;animation:firefly  8.5s -1.0s ease-in-out infinite}
+body.night #ambient i:nth-child(2){left:29%;bottom:39%;width:5px;height:5px;animation:firefly 11.0s -6.2s ease-in-out infinite}
+body.night #ambient i:nth-child(3){left:44%;bottom:28%;width:8px;height:8px;animation:firefly  7.5s -3.1s ease-in-out infinite}
+body.night #ambient i:nth-child(4){left:63%;bottom:42%;animation:firefly 12.0s -8.4s ease-in-out infinite}
+body.night #ambient i:nth-child(5){left:76%;bottom:26%;width:5px;height:5px;animation:firefly  9.5s -4.7s ease-in-out infinite}
+body.night #ambient i:nth-child(6){left:88%;bottom:35%;width:8px;height:8px;animation:firefly 10.5s -2.3s ease-in-out infinite}
+
+@keyframes firefly{
+  0%   {transform:translate(0,0)        scale(.86); opacity:0}
+  8%   {opacity:.92}
+  20%  {transform:translate(9px,-7px)   scale(1);   opacity:.34}
+  33%  {transform:translate(16px,4px)   scale(.95); opacity:.95}
+  47%  {transform:translate(6px,11px)   scale(.90); opacity:.24}
+  61%  {transform:translate(-8px,5px)   scale(1);   opacity:.90}
+  75%  {transform:translate(-13px,-6px) scale(.92); opacity:.30}
+  88%  {transform:translate(-4px,-10px) scale(.98); opacity:.80}
+  100% {transform:translate(0,0)        scale(.86); opacity:0}
+}
+
+/* 🔴 Somebody who has asked their phone to stop animating things has asked for
+   a reason, and this product is for people who are already overloaded. The
+   rabbit still changes state; it just stops breathing and the grass stands
+   still. */
+@media (prefers-reduced-motion: reduce){
+  .breathe,#skydrift,#ambient i{animation:none}
+}
+
+/* 🔴 iOS turns a long press into a text selection.
+ *
+ * Holding the rabbit on an iPhone brought up Safari's Copy / Look Up / Translate
+ * callout with selection handles around the artwork, and no recording ever
+ * started — the product's main gesture, unusable on its reference platform.
+ * `preventDefault()` on pointerdown does not stop it; only these do.
+ *
+ * Selection is given back to the bubbles, because a person may well want to
+ * copy their own sentence out of one. It is the meadow that must not be
+ * selectable, not the words.
+ */
+.stage,.stage button,.stage a{-webkit-touch-callout:none;
+  -webkit-user-select:none;user-select:none}
+#hold,.leaf-token{touch-action:none}
+.bubble,.bubble *{-webkit-user-select:text;user-select:text}
+
+/* ---- one unit for everything standing in the meadow ---- */
+.anchor{position:absolute;top:0;left:50%;height:100%;aspect-ratio:1/1;
+        transform:translateX(-50%);pointer-events:none}
+
+.breathe{position:absolute;inset:0;transform-origin:50% var(--ground);
+         will-change:transform;
+         animation:breathe 4.6s cubic-bezier(.45,0,.35,1) infinite}
+/* 🔴 The breath does NOT stop while somebody is holding the rabbit. It was
+   built that way for one round - the reasoning being that the warm glow should
+   be the only thing moving - and the Owner refused it on sight: a rabbit that
+   stops breathing the moment you speak to it reads as a rabbit that froze.
+   Being listened to is not the same as being held still. */
+/* 🔴 Anisotropic on purpose. A chest rises more than it widens; scaling both
+   axes by the same 1.4% read as the whole rabbit zooming, which is a different
+   thing and a slightly wrong one. `transform-origin` is the ground line, so the
+   feet stay planted and only the body lifts.
+
+   The V2 addendum specified 0.6-0.8% vertical and 0.2-0.3% horizontal. Those
+   numbers were written before anyone watched it on a phone, and the Owner's
+   report on 2026-08-29 was that she could see nothing at all. This sits just
+   above that range. 🔴 If it reads as too much, the two numbers to change are
+   here and nowhere else. */
+/* 🔴 2026-08-29, measured rather than argued, and then measured again on a
+   phone. `transform-origin` is the ground line, so almost all of the scale
+   shows up as travel at the top of the head:
+
+       5.5s / 1.011   2.46px    Owner could not see it at all
+       4.6s / 1.018   4.03px    Owner: still far too small on the phone
+       4.6s / 1.035   7.83px    this
+       4.6s / 1.045  10.07px    the head starts to stretch; rubber, not breath
+
+   1.035 is the largest amplitude that still reads as a chest on a flat
+   painting. The hold at 48-58% is what makes it a breath rather than a pulse:
+   it fills, rests, and falls. The ratio between the axes is kept at about 3:1
+   because a chest rises much more than it widens - equal axes read as the
+   whole rabbit zooming, which is a different gesture and the wrong one. */
+@keyframes breathe{0%,100%{transform:scaleY(1) scaleX(1)}
+  48%,58%{transform:scaleY(1.035) scaleX(1.012)}}
+
+.sp{position:absolute;display:block;opacity:0;pointer-events:none;
+    transition:opacity var(--t-state) ease-in-out;user-select:none;-webkit-user-drag:none}
+.sp.on{opacity:1}
+.sp.rabbit_idle     {width:28.294%;left:calc(50% - 13.885%);top:calc(var(--ground) - 26.000%)}
+.sp.rabbit_listening{width:30.466%;left:calc(50% - 15.070%);top:calc(var(--ground) - 28.131%)}
+.sp.rabbit_grass    {width:26.571%;left:calc(50% - 12.524%);top:calc(var(--ground) - 17.714%)}
+.sp.rabbit_carrot   {width:16.686%;left:calc(50% -  8.229%);top:calc(var(--ground) - 24.833%)}
+.sp.rabbit_sleeping {width:23.089%;left:calc(50% - 11.695%);top:calc(var(--ground) - 15.393%)}
+.sp.basket          {width:17.272%;left:calc(50% -  7.346% + 16%);top:calc(var(--ground) - 13.012%)}
+
+/* The rabbit is the control. The sprite never moves on press: a picture that
+   jumps under the thumb reads as a bug, not as feedback. */
+#hold{position:absolute;left:50%;top:calc(var(--ground) - 30%);
+  width:31%;height:30%;min-width:44px;min-height:44px;transform:translateX(-50%);
+  z-index:4;background:none;border:0;padding:0;cursor:pointer;pointer-events:auto;border-radius:46%}
+body[data-rabbit="rabbit_sleeping"] #hold{top:calc(var(--ground) - 17%);width:27%;height:19%}
+body[data-rabbit="rabbit_grass"] #hold{top:calc(var(--ground) - 20%);width:29%;height:22%}
+body[data-rabbit="rabbit_carrot"] #hold{top:calc(var(--ground) - 26%);width:21%;height:28%}
+#hold:focus-visible{outline:3px solid var(--focus);outline-offset:6px}
+
+/* 🔴 Q-20 — the only thing on screen during the second the microphone takes.
+ *
+ * `getUserMedia()` needs one to two seconds on a phone, and `#recDot` cannot
+ * honestly appear until MediaRecorder is actually running. So the press used
+ * to produce *nothing at all*, the finger came off, and the guard that
+ * refuses to record a press nobody is holding fired — correctly, silently.
+ * The Owner reported it as "I can't tell whether the screen felt my finger."
+ *
+ * 🔴 The sprite still does not move (see #hold above — that rule stands).
+ * What arrives is light, not motion. A picture that jumps under the thumb
+ * reads as a bug; a warmth that arrives under the thumb reads as an answer.
+ *
+ * It is painted before the sprites in the markup, so it sits behind the
+ * rabbit rather than washing over it.
+ */
+#warm{position:absolute;left:50%;top:calc(var(--ground) - 34%);
+  width:58%;height:46%;transform:translateX(-50%);pointer-events:none;
+  border-radius:50%;opacity:0;transition:opacity .12s ease-out;
+  background:radial-gradient(closest-side,
+             rgba(255,212,144,.50), rgba(255,212,144,.20) 55%, rgba(255,212,144,0) 100%)}
+body.pressing #warm{opacity:1}
+body.night #warm{background:radial-gradient(closest-side,
+             rgba(255,204,138,.40), rgba(255,204,138,.15) 55%, rgba(255,204,138,0) 100%)}
+
+/* Up to five quiet reflection tokens.  The tray has no pointer surface of its
+   own; only the visible circles receive input, above the narrower rabbit hit
+   area.  Basket, glow and scenery remain non-interactive. */
+#leafTray{position:absolute;inset:0;z-index:9;pointer-events:none}
+.leaf-token{position:absolute;width:44px;height:44px;border:0;
+  border-radius:50%;padding:7px;background:radial-gradient(circle,
+    rgba(253,248,226,.27) 0 44%,rgba(253,248,226,.10) 62%,rgba(253,248,226,0) 76%);
+  box-shadow:none;cursor:pointer;pointer-events:auto;
+  animation:leaf-float 4.2s ease-in-out infinite}
+.leaf-token:nth-child(1){left:calc(50% - 18%);top:44%;--leaf-scale:.86;--leaf-turn:-8deg}
+.leaf-token:nth-child(2){left:calc(50% - 13%);top:32%;--leaf-scale:1;--leaf-turn:5deg;animation-duration:4.8s;animation-delay:-1.7s}
+.leaf-token:nth-child(3){left:calc(50% +  7%);top:29%;--leaf-scale:.90;--leaf-turn:-3deg;animation-duration:3.9s;animation-delay:-.8s}
+.leaf-token:nth-child(4){left:calc(50% + 16%);top:36%;--leaf-scale:.96;--leaf-turn:9deg;animation-duration:4.6s;animation-delay:-2.3s}
+.leaf-token:nth-child(5){left:calc(50% + 10%);top:46%;--leaf-scale:.84;--leaf-turn:-7deg;animation-duration:4.1s;animation-delay:-1.2s}
+@keyframes leaf-float{0%,100%{transform:translateY(-1px)}50%{transform:translateY(1px)}}
+.leaf-token img{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none;
+  opacity:1;transform:rotate(var(--leaf-turn,0deg)) scale(var(--leaf-scale,1))}
+.leaf-token:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+/* ---- the single dialogue position ---- */
+.dialogue{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(100% - var(--ground) + 30%);width:var(--bubble-w);z-index:11;pointer-events:none}
+.bubble{position:absolute;left:0;right:0;bottom:0;
+  background:var(--paper);border:1px solid var(--paper-line);border-radius:18px;
+  padding:14px 16px;color:var(--ink);font-size:16px;line-height:1.55;
+  box-shadow:0 10px 30px rgba(30,25,15,.18);
+  opacity:0;visibility:hidden;transition:opacity var(--t-bubble) ease-in-out}
+.bubble.on{opacity:1;visibility:visible;pointer-events:auto}
+/* Only Mallow's bubble has a tail. That, and the caret in the other one, is the
+   entire speaker distinction — no labels (PRODUCT_DECISIONS 30). */
+.bubble.mallow::after{content:"";position:absolute;left:50%;bottom:-9px;
+  width:20px;height:10px;margin-left:-10px;background:var(--paper);
+  clip-path:polygon(0 0,100% 0,50% 100%)}
+
+/* What Mallow heard, shown on every receipt. Quieter than the reply, because
+   it is a quotation and not a voice. */
+#heard{font-size:14px;line-height:1.5;color:var(--ink-soft);margin-bottom:6px;
+  padding-bottom:6px;border-bottom:1px solid var(--paper-line)}
+
+#note{display:block;width:100%;border:0;background:none;resize:none;
+  font:inherit;color:var(--ink);line-height:1.55;max-height:30dvh;overflow-y:auto}
+#note:focus{outline:none}
+#note::placeholder{color:var(--ink-soft);opacity:.75}
+
+.row{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+.row button{min-height:44px;min-width:44px;padding:0 18px;border-radius:12px;
+  border:1px solid var(--paper-line);background:rgba(255,255,255,.6);
+  color:var(--ink);font:inherit;cursor:pointer}
+.row button.primary{background:#e9efdc;border-color:#c6d4a8}
+.row button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+
+/* ---- the low-presence way in ---- */
+#entry{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(100% - var(--ground) - 9%);
+  min-height:44px;padding:0 20px;border:0;cursor:pointer;border-radius:999px;
+  background:rgba(253,251,246,.62);backdrop-filter:blur(2px);
+  color:#4a473e;font:italic 15px/44px inherit;z-index:4;
+  transition:opacity var(--t-bubble) ease-in-out}
+body.night #entry{background:rgba(20,26,40,.5);color:#e9e6dc}
+#entry:focus-visible{outline:3px solid var(--focus);outline-offset:2px;opacity:1}
+body.busy #entry,body.talking #entry{opacity:0;pointer-events:none}
+
+/* ---- the way to your own records ----
+   Quiet, but findable. It used to be 50%-opacity text with no edge, and the
+   first person to use the deployed app could not see that it was a control at
+   all. A pill in the meadow's own green, outlined so it reads as pressable. */
+/* 🔴 inline-flex, not an inline anchor.
+   `min-height` and vertical padding do nothing to an inline box, so the pill
+   was never 44px tall and its label sat wherever the line box put it. */
+#book{position:absolute;left:max(10px,env(safe-area-inset-left,0px));
+  bottom:calc(8px + var(--safe-b));z-index:4;
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;min-width:96px;padding:0 20px;
+  color:#33352c;font:14px/1 inherit;text-decoration:none;
+  background:rgba(150,168,132,.30);border:1px solid rgba(255,255,255,.85);
+  border-radius:999px;backdrop-filter:blur(2px)}
+body.night #book{color:#eceadf;background:rgba(150,168,132,.30);
+  border-color:rgba(255,255,255,.6)}
+body.night #entry{color:#e8e6dd;text-shadow:0 1px 8px rgba(0,0,0,.6)}
+#book:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+body.talking #book{opacity:0;pointer-events:none}
+
+/* ---- what a sentence can look like ----
+   Shown under the textarea, because people open the meadow and do not know
+   what they are supposed to say. Two examples on purpose: one chore with a
+   duration, one thing carried in the head. */
+#examples{margin-top:8px;font-size:12.5px;line-height:1.5;color:var(--ink-soft)}
+
+/* ---- the gap between sent and answered ----
+   A real model call is two to four seconds. Without something here the page
+   looks frozen, which is what the first person to use it reported. */
+/* ---- the model is working ----
+   One component for both routes: held the rabbit, or typed. An ear rather
+   than a spinner, because what is happening is that something said is being
+   taken in — and deliberately not the word "listening", since by now the
+   microphone is closed and inviting more speech would be a lie. */
+#thinking{display:none;align-items:center;gap:9px;color:var(--ink-soft);font-size:15px}
+body.busy #thinking{display:flex}
+#thinking .ear{width:26px;height:26px;flex:0 0 26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(150,168,132,.28);border:1px solid rgba(120,110,92,.22)}
+#thinking .ear svg{width:14px;height:14px;display:block}
+#thinking .dots{display:inline-flex;gap:3px;align-items:center}
+#thinking i{width:4px;height:4px;border-radius:50%;background:currentColor;
+  opacity:.35;animation:tick 1.2s ease-in-out infinite}
+#thinking i:nth-child(2){animation-delay:.18s}
+#thinking i:nth-child(3){animation-delay:.36s}
+@keyframes tick{0%,100%{opacity:.25}50%{opacity:.9}}
+
+/* ---- the microphone is actually open ----
+   Shown only after MediaRecorder has started. Never before: a page that says
+   "listening" while the permission sheet is still up is pretending to hear. */
+#micHint{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(100% - var(--ground) - 9%);
+  display:inline-flex;align-items:center;gap:7px;
+  padding:0 16px;min-height:38px;border-radius:999px;z-index:11;
+  background:rgba(253,251,246,.86);color:#4a473e;font:14px/1 inherit;
+  white-space:nowrap;opacity:0;transition:opacity 180ms ease-in-out;
+  pointer-events:none}
+#micHint.on{opacity:1}
+body.night #micHint{background:rgba(20,26,40,.72);color:#e9e6dc}
+
+/* ---- the microphone is open ----
+   Above the rabbit's head, white, and still. A blinking red dot is what an
+   app uses when it wants you to feel watched; this one only has to say that
+   the microphone is on. */
+#recDot{position:absolute;left:50%;transform:translateX(-50%);
+  top:calc(var(--ground) - 33%);width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;z-index:11;
+  background:rgba(74,71,62,.55);backdrop-filter:blur(2px);
+  opacity:0;transition:opacity 180ms ease-in-out;pointer-events:none}
+#recDot.on{opacity:1}
+#recDot svg{width:17px;height:17px;display:block}
+
+#gate{position:absolute;left:50%;bottom:12dvh;transform:translateX(-50%);z-index:13;
+  width:min(84vw,380px);padding:18px 18px 16px;border-radius:18px;
+  background:rgba(253,251,246,.95);border:1px solid rgba(120,110,92,.22);
+  box-shadow:0 12px 34px rgba(30,25,15,.2);text-align:center;color:#3d3a34}
+#gate p{font-size:15px;margin-bottom:12px}
+#gate small{display:block;margin-top:10px;font-size:12px;color:#6b675e;line-height:1.5}
+.gbtn{display:block;width:100%;min-height:44px;margin-top:8px;border-radius:12px;
+  border:1px solid #c6d4a8;background:#e9efdc;color:#3d3a34;font:inherit;cursor:pointer}
+.gbtn.ghost{background:rgba(255,255,255,.6);border-color:rgba(120,110,92,.22)}
+.gbtn[disabled]{opacity:.55;cursor:default}
+/* A failure gets the same width as the thing that failed, and enough weight to
+   be read — but it is information, not an alarm. */
+#authMsg,#accountMsg{margin-top:10px;font-size:13px;line-height:1.55;
+  color:#6b4a2f;background:rgba(214,178,140,.16);border-radius:10px;
+  padding:9px 11px;text-align:start}
+/* ---- the account, inside Settings ---- */
+#accountBox{margin-top:20px;padding-top:16px;
+  border-top:1px solid rgba(120,110,92,.18)}
+#accountBox h3{font-size:14px;margin:0 0 6px}
+#accountBox p{font-size:13px;line-height:1.6;color:var(--ink-soft);margin:0 0 10px}
+#accountBox button{min-height:44px;width:100%;margin-top:8px;border-radius:12px;
+  border:1px solid rgba(120,110,92,.22);background:rgba(255,255,255,.6);
+  color:#3d3a34;font:inherit;cursor:pointer}
+#accountBox button.primary{background:#e9efdc;border-color:#c6d4a8}
+#accountBox button[disabled]{opacity:.55;cursor:default}
+#pills{position:absolute;top:calc(8px + env(safe-area-inset-top,0px));left:50%;
+  transform:translateX(-50%);z-index:8;display:flex;gap:6px;white-space:nowrap}
+#pills span,#pills a,#pills button{font-size:11px;letter-spacing:.04em;padding:5px 12px;
+  border-radius:999px;background:rgba(60,50,35,.62);color:#fdfbf6;
+  text-decoration:none;line-height:1.4;border:0;font-family:inherit}
+#pills a,#pills button{background:rgba(60,50,35,.78)}
+#pills a:focus-visible,#pills button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+/* 🔴 `Temporary workspace` is a status, not a control, and it used to be
+   dressed exactly like the two controls beside it — same pill, same fill, same
+   size — so it read as a button and did nothing when pressed. Owner: 「我一直
+   想吐槽 Lang 和 Settings 旁邊的 Temporary workspace pill 是幹嘛的。」
+   The information stays; the affordance goes. No fill, no border, smaller and
+   quieter, a dot instead of a shape you would press, and pushed away from the
+   two things that are pressable. */
+#pills #tempPill{background:none;border:0;padding:5px 0 5px 4px;font-size:10px;
+  color:rgba(43,49,53,.72);letter-spacing:.03em;margin-inline-end:4px;
+  display:inline-flex;align-items:center;gap:5px;cursor:default}
+#pills #tempPill::before{content:"";width:5px;height:5px;border-radius:50%;
+  background:rgba(43,49,53,.48);flex:none}
+body.night #pills #tempPill{color:rgba(253,251,246,.76)}
+body.night #pills #tempPill::before{background:rgba(253,251,246,.54)}
+#pills{gap:10px}
+
+/* ---- rare-leaf card ---- */
+#card,#settingsPanel{position:absolute;inset:auto 0 0 0;z-index:12;
+  padding:22px 20px calc(28px + var(--safe-b));
+  background:var(--paper);border-top:1px solid var(--paper-line);
+  border-radius:22px 22px 0 0;color:var(--ink);
+  transform:translateY(101%);transition:transform 320ms cubic-bezier(.22,.7,.3,1)}
+#card.on,#settingsPanel.on{transform:translateY(0)}
+#card h2,#settingsPanel h2{font-size:17px;font-weight:600;margin-bottom:8px}
+#card p,#settingsPanel p{font-size:15px;line-height:1.6;color:var(--ink-soft)}
+#settingsPanel label{display:block;font-size:13px;color:var(--ink-soft);margin:14px 0 6px}
+/* The fields are wrapped only so they can be hidden as one. `display:contents`
+   keeps every existing rule above applying exactly as it did to direct
+   children; `[hidden]{display:none!important}` still wins when it is off. */
+#settingsForm{display:contents}
+#settingsPanel select,#settingsPanel input{width:100%;box-sizing:border-box;
+  border:1px solid var(--paper-line);border-radius:12px;background:#fffdf8;
+  color:var(--ink);font:inherit;padding:11px 12px}
+
+.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:1ms !important}
+  .breathe{animation:none}
+  #skydrift,#ambient i{animation:none}
+  .leaf-token{animation:none}
+  #thinking i{animation:none;opacity:.6}
+}
+</style>
+</head>
+<body class="day" data-rabbit="rabbit_idle">
+
+<div class="stage">
+  <img class="bg day"   src="/art/background_day.webp"   alt="" aria-hidden="true">
+  <img class="bg night" data-src="/art/background_night.webp" alt="" aria-hidden="true">
+    <div id="skydrift" aria-hidden="true"></div>
+  <div id="ambient" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+
+  <button id="clock" type="button" aria-live="off">
+    <span class="clock-face">
+      <span class="t" id="clockTime"></span>
+      <span class="d" id="clockDate"></span>
+    </span>
+  </button>
+
+  <div class="anchor">
+    <!-- Q-20: the press answer. Behind the rabbit, on purpose. -->
+    <div id="warm" aria-hidden="true"></div>
+    <div class="breathe">
+      <img class="sp rabbit_idle on"   src="/art/rabbit_idle.webp"      alt="" aria-hidden="true">
+      <img class="sp rabbit_listening" src="/art/rabbit_listening.webp" alt="" aria-hidden="true">
+      <img class="sp rabbit_grass"     data-src="/art/rabbit_grass.webp"     alt="" aria-hidden="true">
+      <img class="sp rabbit_carrot"    data-src="/art/rabbit_carrot.webp"    alt="" aria-hidden="true">
+      <img class="sp rabbit_sleeping"  data-src="/art/rabbit_sleeping.webp"  alt="" aria-hidden="true">
+    </div>
+    <img class="sp basket on" src="/art/basket.webp" alt="" aria-hidden="true">
+    <div id="leafTray" data-label="{{ t('leaf_open') }}"></div>
+
+    <button id="hold" aria-describedby="holdHelp" aria-label="{{ t('hold_label') }}">
+      <span class="sr" id="holdHelp">{{ t('hold_help') }}</span>
+    </button>
+  </div>
+
+  <!-- 🔴 The microphone is open. White, still, above the rabbit's head.
+       A blinking red dot is what an app uses when it wants you to feel
+       watched; this one only has to say that the microphone is on. -->
+  <div id="recDot" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.7"
+         stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2.5" width="6" height="11" rx="3"></rect>
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0"></path>
+      <path d="M12 17.5V21"></path>
+    </svg>
+  </div>
+  <p id="micHint" role="status" aria-live="polite"></p>
+
+  <button id="entry">{{ t('entry') }}</button>
+
+  <!-- Shown only when nobody is signed in and the deployment requires it.
+       Without this the front door would be a 401. -->
+  <div id="gate" hidden>
+    <p>{{ t('gate_lede') }}</p>
+    <button type="button" id="gGoogle" class="gbtn" disabled>{{ t('sign_in_google') }}</button>
+    <button type="button" id="gAnon" class="gbtn ghost" disabled>{{ t('just_look') }}</button>
+    <!-- 🔴 The front door used to fail in complete silence: the promise chain
+         behind these buttons had no catch, so a blocked popup, an unauthorised
+         domain and a dead network all looked identical to nothing happening.
+         This is where a failure gets to say what it was. -->
+    <!-- `status`/polite, not `alert`: the person is looking straight at the
+         button they just pressed, so this needs announcing, not interrupting
+         — and it matches how the rest of the page speaks. -->
+    <p id="authMsg" role="status" aria-live="polite" hidden></p>
+    <button type="button" id="authRetry" class="gbtn" hidden>{{ t('auth_retry') }}</button>
+    <small id="gNote">{{ t('gate_note') }}</small>
+  </div>
+  <a id="book" href="/records?lang={{ lang }}">{{ t('book') }}</a>
+  <div id="pills">
+    <span id="demoPill" role="note" {% if not demo %}hidden{% endif %}>{{ t('demo_pill') }}</span>
+    {% if not who or who.is_anonymous %}<span id="tempPill" role="note">{{ t('temp_pill') }}</span>{% endif %}
+    <a id="langSwitch" href="/?lang={{ other_lang }}" lang="{{ other_lang }}"
+       aria-label="{{ t('switch_label') }}">{{ t('switch_to') }}</a>
+    <!-- 🔴 No `hidden`. It used to be revealed only after `boot()` resolved past
+         the sign-in gate, which meant three things at once: the pill row
+         reflowed when it appeared, a person looking at the gate was told
+         this app has no settings, and any failure inside `boot()` removed
+         it permanently for somebody who was otherwise using the app fine.
+         Being able to SEE and ADJUST a setting and knowing WHICH workspace
+         it is saved to are two different questions; only the second one
+         needs an identity. -->
+    <button type="button" id="settingsOpen">{{ t('settings_open') }}</button>
+  </div>
+
+  <div class="dialogue">
+    <div class="bubble you" id="youBubble">
+      <label class="sr" for="note">{{ t('note_label') }}</label>
+      <textarea id="note" rows="1" maxlength="2000" enterkeyhint="done"
+                placeholder="{{ t('note_placeholder') }}"></textarea>
+      <p id="examples">{{ t('note_examples') }}</p>
+      <div class="row">
+        <button type="button" id="cancelBtn">{{ t('cancel') }}</button>
+        <button type="button" id="sendBtn" class="primary">{{ t('send') }}</button>
+      </div>
+    </div>
+
+    <div class="bubble mallow" id="mallowBubble" role="status" aria-live="polite">
+      <p id="heard" hidden></p>
+      <span id="mallowText"></span>
+      <span id="thinking" aria-hidden="true">
+        <span class="ear">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 9a5 5 0 0 1 10 0c0 3-2.6 3.6-3.6 5.4-.6 1-.4 2.4-1.9 2.9"></path>
+            <path d="M10.2 9.2a1.9 1.9 0 0 1 3.6.8"></path>
+          </svg>
+        </span>
+        <span id="thinkingText"></span>
+        <span class="dots"><i></i><i></i><i></i></span>
+      </span>
+      <!-- 🔴 Only reachable while Mallow is thinking. `hidden` is cleared and
+           set by `thinking()` alone, so it cannot outlive the wait it belongs
+           to and cancel whatever came next. -->
+      <div class="row" id="waitRow" hidden>
+        <button type="button" id="stopBtn">{{ t('stop_waiting') }}</button>
+      </div>
+      <div class="row" id="confirmRow" hidden>
+        <button type="button" id="discardBtn">{{ t('discard_receipt') }}</button>
+        <button type="button" id="editBtn" class="primary">{{ t('edit') }}</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="card" role="dialog" aria-modal="true" aria-labelledby="cardTitle" aria-hidden="true">
+    <h2 id="cardTitle"></h2>
+    <p id="cardBody"></p>
+    <div class="row"><button type="button" id="cardClose" class="primary">{{ t('card_close') }}</button></div>
+  </div>
+  <div id="settingsPanel" role="dialog" aria-modal="true"
+       aria-labelledby="settingsTitle" aria-hidden="true">
+    <h2 id="settingsTitle">{{ t('settings_title') }}</h2>
+    <p>{{ t('reflection_note') }}</p>
+    <p id="settingsPending" hidden>{{ t('settings_pending') }}</p>
+    <p id="settingsLoading" hidden>{{ t('settings_loading') }}</p>
+    <p id="settingsFailed" hidden>{{ t('settings_load_failed') }}</p>
+    <div id="settingsForm" hidden>
+    <label for="cadence">{{ t('reflection_cadence') }}</label>
+    <select id="cadence">
+      <option value="off">{{ t('cadence_off') }}</option>
+      <option value="daily">{{ t('cadence_daily') }}</option>
+      <option value="weekly">{{ t('cadence_weekly') }}</option>
+      <option value="biweekly">{{ t('cadence_biweekly') }}</option>
+      <option value="monthly">{{ t('cadence_monthly') }}</option>
+    </select>
+    <div id="weekdayRow" hidden>
+      <label for="weekday">{{ t('reflection_weekday') }}</label>
+      <select id="weekday">
+        <option value="0">{{ t('weekday_mon') }}</option>
+        <option value="1">{{ t('weekday_tue') }}</option>
+        <option value="2">{{ t('weekday_wed') }}</option>
+        <option value="3">{{ t('weekday_thu') }}</option>
+        <option value="4">{{ t('weekday_fri') }}</option>
+        <option value="5">{{ t('weekday_sat') }}</option>
+        <option value="6">{{ t('weekday_sun') }}</option>
+      </select>
+    </div>
+    <div id="monthdayRow" hidden>
+      <label for="monthday">{{ t('reflection_monthday') }}</label>
+      <input id="monthday" type="number" min="1" max="31" value="1">
+    </div>
+    <label for="reflectionTime">{{ t('reflection_time') }}</label>
+    <input id="reflectionTime" type="time" value="23:00">
+    </div>
+    <!-- Anonymous mode has one exit. Google sign-in stays at the front door so
+         this panel never promises an in-place workspace link. -->
+    <section id="accountBox" hidden>
+      <h3 id="accountTitle">{{ t('account_title') }}</h3>
+      <p id="accountBody"></p>
+      <p id="accountMsg" role="status" aria-live="polite" hidden></p>
+      <div id="accountAnon" hidden>
+        <button type="button" id="accountLeave" class="ghost">{{ t('account_leave') }}</button>
+      </div>
+      <div id="accountGoogle" hidden>
+        <button type="button" id="accountSignOut" class="ghost">{{ t('account_signout') }}</button>
+      </div>
+      <button type="button" id="accountRetry" hidden>{{ t('auth_retry') }}</button>
+    </section>
+    <div class="row">
+      <button type="button" id="settingsClose">{{ t('settings_close') }}</button>
+      <button type="button" id="settingsSave" class="primary">{{ t('settings_save') }}</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/auth.js"></script>
+<script>
+"use strict";
+const S = {{ script_strings | tojson }};
+const LANG = {{ lang | tojson }};
+const AUTH_RETURN_TO = {{ auth_return_to | tojson }};
+const api = (u,o) => window.Mallow.mallowFetch(u,o);
+/* 🔴 Three answers, not one boolean. (Strategist ruling, 2026-08-30.)
+ *
+ *   resolving  the page is still working out whose workspace this is
+ *   none       there is no workspace: nobody has chosen one, or boot() failed
+ *              on a deployment that requires Firebase
+ *   ready      there is a uid, so a preference finally has somewhere to go
+ *
+ * The old flag answered "is there a workspace?" with false during BOTH of the
+ * first two, and the panel filled in the product defaults whenever the answer
+ * was false. For `none` those defaults are true - nothing is stored anywhere
+ * yet. For `resolving` they are a statement about somebody's saved schedule,
+ * made before reading it, and it was wrong for everyone who had ever changed
+ * theirs. Reloading the page - which is what changing language does - put every
+ * visit through that window.
+ *
+ * 🚫 Nothing here waits a fixed number of milliseconds, and the settings button
+ * is never hidden. The panel opens immediately, shows only what it actually
+ * knows, and re-renders when the answer arrives. */
+let wsState = "resolving";
+const $ = s => document.querySelector(s);
+const body = document.body;
+const STATES = ["rabbit_idle","rabbit_listening","rabbit_grass","rabbit_carrot","rabbit_sleeping"];
+const el = {
+  hold:$("#hold"), entry:$("#entry"), note:$("#note"),
+  you:$("#youBubble"), mallow:$("#mallowBubble"), mallowText:$("#mallowText"),
+  confirm:$("#confirmRow"), send:$("#sendBtn"), cancel:$("#cancelBtn"),
+  waitRow:$("#waitRow"), stop:$("#stopBtn"),
+  heard:$("#heard"),
+  edit:$("#editBtn"), discard:$("#discardBtn"), card:$("#card"), cardTitle:$("#cardTitle"),
+  cardBody:$("#cardBody"), cardClose:$("#cardClose"), leafTray:$("#leafTray"),
+  gate:$("#gate"), gGoogle:$("#gGoogle"), gAnon:$("#gAnon"),
+  authMsg:$("#authMsg"), authRetry:$("#authRetry"), tempPill:$("#tempPill"),
+  accountBox:$("#accountBox"), accountBody:$("#accountBody"),
+  accountMsg:$("#accountMsg"), accountAnon:$("#accountAnon"),
+  accountGoogle:$("#accountGoogle"),
+  accountLeave:$("#accountLeave"), accountSignOut:$("#accountSignOut"),
+  accountRetry:$("#accountRetry"),
+  settings:$("#settingsPanel"), settingsOpen:$("#settingsOpen"),
+  settingsPending:$("#settingsPending"),
+  settingsLoading:$("#settingsLoading"), settingsFailed:$("#settingsFailed"),
+  settingsForm:$("#settingsForm"),
+  settingsClose:$("#settingsClose"), settingsSave:$("#settingsSave"),
+  cadence:$("#cadence"), reflectionTime:$("#reflectionTime"),
+  weekdayRow:$("#weekdayRow"), weekday:$("#weekday"),
+  monthdayRow:$("#monthdayRow"), monthday:$("#monthday"),
+  micHint:$("#micHint"), thinking:$("#thinking"),
+  recDot:$("#recDot"), thinkingText:$("#thinkingText"),
+};
+
+let sprite = "rabbit_idle";
+let recorder = null, chunks = [], stream = null;
+let capture = null;      // the capture whose reply is on screen
+/* 🔴 How the capture on screen was made: "voice" or "text".
+ *
+ * `Say it again` has been wrong in both directions. It used to open the
+ * keyboard for someone who had spoken — the label promised voice and handed
+ * over a keyboard, which for the person this is built for is the worst
+ * possible swap, because her hands are full. Q-42 fixed that by always going
+ * back to the rabbit, and so broke the other half: someone who typed, quite
+ * possibly because she cannot speak right now, was told to hold the rabbit.
+ *
+ * Neither default is right. The correction belongs in whichever way she was
+ * already talking, so that is what is remembered. */
+let captureOrigin = "voice";
+let lastHeard = "";      // the person's own words, kept verbatim
+let idleTimer = null, fadeTimer = null;
+let surfaceGen = 0;      // any new surface invalidates an older async UI answer
+let receiptTimer = null, receiptRemaining = 0, receiptStarted = 0;
+const RECEIPT_MS = 8000;
+
+/* 🔴 One capture id per thing the person did, and one request at a time.
+ *
+ * On the deployed app the same sentence was filed twice, two seconds apart,
+ * both rows active — and an append-only ledger cannot take a row back. It also
+ * would make a later reflection describe an event twice.
+ *
+ * The id used to be minted inside the send function, so a second send was a
+ * second capture and the server's replay guard — which is keyed on the id and
+ * works — never saw a repeat. Now the id belongs to the recording or to the
+ * typed note, a retry reuses it, and `inFlight` stops a second send from
+ * starting while the first is still out.
+ */
+let captureId = null;
+let inFlight = false;
+let replacing = null;    // the capture the next submission corrects, if any
+
+/* --- the silence gate ----------------------------------------------------
+ *
+ * A recording of silence is not an empty recording. It is a well-formed
+ * container of several kilobytes, and handing one to the model produced,
+ * on the deployed app, a fluent French sentence about sewing a button onto
+ * Thomas's coat — filed, with food issued, as something the person had said.
+ *
+ * 🔴 This is an energy gate, not speech detection, and the difference matters
+ * enough to write down: it measures whether any sound arrived, and it cannot
+ * tell speech from a door closing. What it can do is refuse to spend a model
+ * call on a recording that carried nothing, which is the case that produced
+ * an invented record.
+ *
+ * Fail closed: if the measurement is unavailable, voice is not offered and the
+ * text box opens instead. Better to ask someone to type than to file a
+ * sentence they never said.
+ */
+const GATE = {
+  MIN_MS: 700,        // below this it is a touch, not a sentence
+  RMS: 0.02,          // a frame quieter than this counted as no sound
+  MIN_FRAMES: 5,      // frames are sampled every 60ms; ~0.3s of sound
+};
+function gateVerdict(m){
+  if(!m || !m.measured) return "unmeasured";
+  if(m.ms < GATE.MIN_MS) return "too_short";
+  if(m.loudFrames < GATE.MIN_FRAMES) return "too_quiet";
+  return "send";
+}
+/* Exposed so the browser suite can drive the decision without a microphone.
+   The thresholds are the ones the page actually uses; there is no second copy. */
+window.__mallowGate = {GATE, gateVerdict};
+
+/* 🔴 One AudioContext, opened inside the touch that started the recording.
+ *
+ * On iOS Safari an AudioContext created outside a user gesture starts
+ * `suspended`, and a suspended context's analyser reports silence — every
+ * frame reads zero. The meter would then be measuring nothing while believing
+ * it had measured, the gate would call every recording silent, and because the
+ * gate fails closed the microphone would simply never work. Not intermittently:
+ * never, on the platform this app is actually used on.
+ *
+ * `await getUserMedia` is what breaks the gesture chain, so the context is
+ * created and resumed in the pointerdown handler, before that await, and then
+ * kept. iOS also limits how many contexts a page may open, which is the second
+ * reason this is one context for the life of the page rather than one per
+ * recording.
+ *
+ * `wake()` is safe to call repeatedly and returns whether there is a running
+ * context to measure with.
+ */
+let audio = null;
+function wake(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return false;
+  if(!audio){
+    try{ audio = new AC(); }catch(e){ return false; }
+  }
+  if(audio.state === "suspended"){
+    try{ audio.resume(); }catch(e){}
+  }
+  return true;
+}
+
+let meter = null;       // {timer, startedAt, loudFrames}
+function meterStart(mediaStream){
+  if(!wake()) return false;
+  let node;
+  try{
+    const src = audio.createMediaStreamSource(mediaStream);
+    node = audio.createAnalyser();
+    node.fftSize = 1024;
+    src.connect(node);
+  }catch(e){ return false; }
+
+  const buf = new Float32Array(node.fftSize);
+  meter = {loudFrames:0, startedAt:Date.now(), timer:null, node, src:null,
+           ran:false};
+  meter.timer = setInterval(() => {
+    // 🔴 A suspended context hands back an array of zeros without complaining.
+    // "Every sample was exactly zero" is not a quiet room, it is a meter that
+    // is not running — so it is recorded as *not measured*, and the gate
+    // refuses rather than reporting silence it never actually heard.
+    if(audio.state === "running") meter.ran = true;
+    node.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for(let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    if(Math.sqrt(sum / buf.length) >= GATE.RMS) meter.loudFrames++;
+  }, 60);
+  return true;
+}
+function meterStop(){
+  if(!meter) return {measured:false, ms:0, loudFrames:0};
+  clearInterval(meter.timer);
+  try{ meter.node.disconnect(); }catch(e){}
+  const out = {measured:meter.ran, ms:Date.now() - meter.startedAt,
+               loudFrames:meter.loudFrames};
+  meter = null;
+  return out;      // the context stays open; iOS does not like churn
+}
+
+/* ---------------------------------------------------------------- sprites */
+function setSprite(name){
+  if(name === sprite) return;
+  sprite = name;
+  body.dataset.rabbit = name;
+  STATES.forEach(s => document.querySelector(".sp." + s).classList.toggle("on", s === name));
+}
+
+/* Night follows the clock. Nobody wants to configure dusk. */
+function clock(){
+  const h = new Date().getHours();
+  body.classList.toggle("night", h >= 20 || h < 5);
+}
+
+/* Left alone, the rabbit sleeps. Any contact wakes it. */
+function stirred(){
+  clearTimeout(idleTimer);
+  if(sprite === "rabbit_sleeping") setSprite("rabbit_idle");
+  idleTimer = setTimeout(() => {
+    if(!body.classList.contains("busy") && !body.classList.contains("talking"))
+      setSprite("rabbit_sleeping");
+  }, 60000);
+}
+
+/* ---------------------------------------------------------------- bubbles */
+function stopReceiptDismiss(){
+  clearTimeout(receiptTimer);
+  receiptTimer = null;
+  receiptRemaining = 0;
+}
+function startReceiptDismiss(){
+  stopReceiptDismiss();
+  receiptRemaining = RECEIPT_MS;
+  receiptStarted = performance.now();
+  receiptTimer = setTimeout(quiet, receiptRemaining);
+}
+function pauseReceiptDismiss(){
+  if(!receiptTimer) return;
+  receiptRemaining = Math.max(0, receiptRemaining - (performance.now() - receiptStarted));
+  clearTimeout(receiptTimer);
+  receiptTimer = null;
+}
+function resumeReceiptDismiss(){
+  if(receiptTimer || receiptRemaining <= 0) return;
+  receiptStarted = performance.now();
+  receiptTimer = setTimeout(quiet, receiptRemaining);
+}
+function showYou(text){
+  surfaceGen++;
+  stopReceiptDismiss();
+  clearTimeout(fadeTimer);
+  body.classList.add("talking");
+  el.mallow.classList.remove("on");
+  el.heard.hidden = true;
+  el.confirm.hidden = true;
+  el.note.value = text || "";
+  grow();
+  el.you.classList.add("on");
+  el.note.focus({preventScroll:true});
+}
+/* The receipt.
+ *
+ * 🔴 What Mallow heard is shown every time, and the way to change it is there
+ * every time. It used to appear only when the model reported itself unsure —
+ * so a confident mis-hearing was filed with nothing on screen to argue with,
+ * which is exactly the case where being able to argue matters most.
+ *
+ * A receipt is an acknowledgement, not a second confirmation. It stays long
+ * enough to read and to offer two exceptional actions — withdraw it, or say it
+ * again — then makes room by itself. The quiet line is a cue, not a deadline;
+ * touching or focusing the receipt pauses it.
+ */
+function showMallow(line, unsure, heard, options){
+  const view = ++surfaceGen;
+  stopReceiptDismiss();
+  clearTimeout(fadeTimer);
+  body.classList.add("talking");
+  el.you.classList.remove("on");
+  const said = (heard || "").trim();
+  el.heard.textContent = said ? S.you_said + said : "";
+  el.heard.hidden = !said;
+  el.mallowText.textContent = line;
+  const actionable = !!said && !!capture;
+  el.confirm.hidden = !actionable;
+  el.mallow.classList.add("on");
+  if(actionable) startReceiptDismiss();
+  else if(!(options && options.persistent)) fadeTimer = setTimeout(quiet, 2600);
+  return view;
+}
+function quiet(){
+  // Closing the bubble abandons a correction. Nothing was retired, so there is
+  // nothing to put back.
+  surfaceGen++;
+  replacing = null;
+  capture = null;
+  stopReceiptDismiss();
+  clearTimeout(fadeTimer);
+  el.heard.hidden = true;
+  el.confirm.hidden = true;
+  el.you.classList.remove("on");
+  el.mallow.classList.remove("on");
+  body.classList.remove("talking");
+  setSprite("rabbit_idle");
+  stirred();
+}
+/* 🔴 One layout pass per frame, and none at all while an IME is composing.
+ *
+ * `height:auto` followed by reading `scrollHeight` forces a synchronous
+ * layout. Doing that on every `input` event is tolerable with a Latin
+ * keyboard and is not with pinyin: composing 「哄睡」 fires input on every
+ * keystroke *and* on every candidate change, and each one stopped the main
+ * thread to re-measure. Reported as "typing is very slow at first".
+ *
+ * (The larger cause of that report is 17MB of PNG being decoded on a phone —
+ * that is Q-01 and belongs to the images, not here. This is the half that is
+ * ours.)
+ */
+let composing = false, growQueued = false;
+function grow(){
+  if(composing || growQueued) return;
+  growQueued = true;
+  requestAnimationFrame(() => {
+    growQueued = false;
+    const want = Math.min(el.note.scrollHeight, innerHeight * 0.30);
+    el.note.style.height = "auto";
+    const next = Math.min(el.note.scrollHeight, innerHeight * 0.30);
+    el.note.style.height = next + "px";
+    if(!next && want) el.note.style.height = want + "px";
+  });
+}
+el.note.addEventListener("input", grow);
+el.note.addEventListener("compositionstart", () => { composing = true; });
+el.note.addEventListener("compositionend", () => { composing = false; grow(); });
+
+/* ------------------------------------------------------------- recording */
+async function startRec(){
+  if(recorder || inFlight || body.classList.contains("busy")) return;
+  stirred();
+  // 🔴 Q-20 corollary: every exit below must clear the "keep holding" hint.
+  // It was shown before any of this ran, and a finger still down against a
+  // refused microphone would otherwise be told to keep holding for nothing.
+  if(!navigator.mediaDevices || !window.MediaRecorder){ micHint(""); showYou(""); return; }
+  let s;
+  try{ s = await navigator.mediaDevices.getUserMedia({audio:true}); }
+  catch(e){ micHint(""); showYou(""); return; }   // refused or unavailable: same door, no scolding
+  // A press that ended while the permission sheet was open must not start a
+  // recording nobody is holding.
+  if(!el.hold.classList.contains("pressed")){
+    // 🔴 Not silence. The press ended against the permission sheet, which on
+    // iOS is what happens the very first time. Say that it is ready now.
+    s.getTracks().forEach(t=>t.stop());
+    micHint("ready");
+    return;
+  }
+  // Fail closed. Without a meter there is no way to tell a sentence from a
+  // silent room, and a silent room is what produced an invented record.
+  if(!meterStart(s)){ s.getTracks().forEach(t=>t.stop()); micHint(""); showYou(""); return; }
+  stream = s; chunks = [];
+  try{ recorder = new MediaRecorder(s); }
+  catch(e){ meterStop(); stopTracks(); micHint(""); showYou(""); return; }
+  recorder.ondataavailable = e => { if(e.data && e.data.size) chunks.push(e.data); };
+  recorder.onstop = send;
+  // 🔴 One id for this recording. A second stop event, a retry, or a stray
+  // second submit all carry it, and the server files a capture id once.
+  captureId = crypto.randomUUID();
+  recorder.start();
+  setSprite("rabbit_listening");
+  micHint("listening");   // only now: the microphone is genuinely open
+}
+/* Three states, three sentences, and they are deliberately different.
+ *
+ *   holding    🔴 Q-20. The finger has landed and nothing else has happened
+ *              yet. Set synchronously in the pointerdown handler, before
+ *              `wake()` and before startRec's first await, so it cannot be
+ *              delayed by the one to two seconds `getUserMedia` takes. It
+ *              says *keep holding* rather than "please wait" because the
+ *              failure it fixes is a finger coming off.
+ *   listening  the microphone is open — a white mic above the rabbit's head
+ *              and "在聽了，說吧". Shown only once MediaRecorder has started.
+ *              🔴 Never merged with `holding`: claiming to listen while the
+ *              permission sheet is still open is the app pretending to hear.
+ *   ready      🔴 the permission sheet was answered after the finger had
+ *              already come off. On iOS that is *every first attempt*: the
+ *              sheet covers the page, the press ends against it, and the
+ *              guard that refuses to record a press nobody is holding fires
+ *              correctly — silently. So the first try always failed with
+ *              nothing on screen at all.
+ *   ""         nothing.
+ */
+function micHint(state){
+  const text = state === "holding"   ? S.hold_on
+             : state === "listening" ? S.listening_hint
+             : state === "ready"     ? S.mic_ready
+             : state === "again"     ? S.say_again_hint : "";
+  el.micHint.textContent = text;
+  el.micHint.classList.toggle("on", !!text);
+  el.recDot.classList.toggle("on", state === "listening");
+  if(state === "ready" || state === "again"){
+    clearTimeout(micHint._t);
+    micHint._t = setTimeout(() => micHint(""), 3200);
+  }
+}
+function stopTracks(){ if(stream){ stream.getTracks().forEach(t => t.stop()); stream = null; } }
+function stopRec(){
+  micHint("");
+  if(recorder && recorder.state !== "inactive") recorder.stop();
+  else { meterStop(); stopTracks(); setSprite("rabbit_idle"); }
+}
+
+async function send(){
+  const measured = meterStop();
+  const blob = new Blob(chunks, {type:(chunks[0] && chunks[0].type) || "audio/webm"});
+  stopTracks(); recorder = null; chunks = [];
+
+  // 🔴 Nothing was heard: say so, and send nothing. No request, no capture,
+  // no record, no food. The rabbit takes the blame for its own ear.
+  const verdict = gateVerdict(measured);
+  if(verdict === "unmeasured"){
+    // 🔴 The meter never ran, so nothing is known about what was in that
+    // recording — including whether it was silent. Saying "I did not hear you"
+    // would be a claim about audio nobody listened to. The text box opens
+    // instead: voice is withdrawn while it cannot be checked, and the person
+    // still has a way to record their day.
+    setSprite("rabbit_idle");
+    showYou("");
+    return;
+  }
+  if(verdict !== "send" || blob.size < 1200){
+    setSprite("rabbit_idle");
+    showMallow(S.heard_nothing, false, "");
+    return;
+  }
+  if(inFlight) return;
+
+  const fd = new FormData();
+  fd.append("audio", blob, "note.webm");
+  fd.append("capture_id", captureId || crypto.randomUUID());
+  fd.append("mime_type", blob.type);
+  if(replacing) fd.append("replaces", replacing);
+
+  inFlight = true;
+  const mine = beginWait(captureId);
+  try{
+    const r = await api("/voice", {method:"POST", body:fd, signal: mine.controller.signal});
+    const data = await r.json();
+    // 🔴 The answer to a wait that is over changes nothing. Two ways it can be
+    // over: this one was cancelled, or a newer capture started while it was in
+    // the air. Either way the screen belongs to something else now.
+    if(!isCurrent(mine)) return;
+    if(data.state === "discarded"){ afterDiscard(); return; }
+    if(data.state === "fallback_text"){ showYou(""); return; }
+    if(!r.ok || data.state === "failure"){
+      showMallow(S.cannot_record, false, ""); return;
+    }
+    await receipt(data, "voice");
+    captureId = null;               // filed. The next recording is a new one.
+    replacing = null;
+  }catch(e){
+    if(!isCurrent(mine)) return;    // aborted on purpose; not a failure
+    showYou("");                    // the connection went; the door stays open
+  }
+  finally{ if(isCurrent(mine)){ inFlight = false; thinking(false); } }
+}
+
+/* ------------------------------------------------------------- cancelling --
+ *
+ * 🔴 What the button means is an outcome, not a request to hurry.
+ *
+ * The client half is only half: aborting a fetch does not stop the server,
+ * which will usually finish and commit anyway. So the abort is for the screen
+ * and `POST /voice/discard` is for the data, and the server decides inside one
+ * transaction whichever order the two arrive in. If the client half were the
+ * whole of it, a cancel that lost by ten milliseconds would leave a record
+ * behind — which is exactly the failure this exists to prevent.
+ *
+ * `generation` is what makes a late answer harmless. Every wait takes a
+ * number; anything that comes back holding an old one is dropped without
+ * touching the rabbit, the bubble or the food.
+ */
+let waitGen = 0, waiting = null;
+function beginWait(id){
+  waiting = {gen: ++waitGen, captureId: id, controller: new AbortController()};
+  thinking(true);
+  return waiting;
+}
+function isCurrent(w){ return waiting !== null && waiting.gen === w.gen; }
+function afterDiscard(){
+  waiting = null;
+  inFlight = false;
+  thinking(false);
+  captureId = null;
+  replacing = null;                 // a cancelled correction retires nothing
+  setSprite("rabbit_idle");
+  showMallow(S.discarded_note, false, "");
+}
+/* 🔴 Three sentences, and which one is shown depends on what is actually known.
+ *
+ * The first version said "nothing was recorded" the instant the button was
+ * pressed, and swallowed every error from the discard request. So a dropped
+ * connection, an expired token or a 500 produced a screen that said the thing
+ * had been cancelled while the server went on and committed it — which is the
+ * exact failure this whole feature exists to remove, reintroduced in the last
+ * line of it.
+ *
+ * The screen is still freed immediately: nobody should be held in a loading
+ * state to satisfy a promise about data. But the definitive sentence waits for
+ * the server to say so, and when the server never does, the page says that
+ * instead of guessing.
+ */
+const DISCARD_TRIES = 3;
+const DISCARD_REQUEST_MS = 2500;
+
+async function tellServerToDiscard(captureId){
+  // The endpoint is idempotent by construction — a repeat lands on the same
+  // tombstone — so a short bounded retry is safe and is what carries this
+  // through the ordinary case: a few seconds of no signal.
+  for(let attempt = 0; attempt < DISCARD_TRIES; attempt++){
+    const controller = new AbortController();
+    const cutoff = setTimeout(() => controller.abort(), DISCARD_REQUEST_MS);
+    try{
+      const r = await api("/voice/discard", {method:"POST", keepalive:true,
+        signal:controller.signal,
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({capture_id: captureId})});
+      if(r.ok){
+        const data = await r.json().catch(() => ({}));
+        if(data.state === "discarded") return true;
+      }
+    }catch(e){}
+    finally{ clearTimeout(cutoff); }
+    if(attempt < DISCARD_TRIES - 1){
+      await new Promise(done => setTimeout(done, 400 * (attempt + 1)));
+    }
+  }
+  return false;
+}
+
+async function cancelWait(){
+  const w = waiting;
+  if(!w) return;
+  waiting = null;                   // from here every late answer is stale
+  // 🔴 The request goes first and is not awaited before the abort: it has to be
+  // on its way while the commit may still be deciding, and the abort must not
+  // wait for a round trip the person is trying to escape.
+  const told = w.captureId ? tellServerToDiscard(w.captureId)
+                           : Promise.resolve(true);
+  try{ w.controller.abort(); }catch(e){}
+  inFlight = false;
+  thinking(false);
+  captureId = null;
+  replacing = null;
+  setSprite("rabbit_idle");
+  // Provisional: the wait is over, and that is all Mallow knows so far.
+  const view = showMallow(S.stopped_waiting, false, "", {persistent:true});
+  const confirmed = await told;
+  // 🔴 Only if the person is still looking at this. If they have started
+  // something else since, the answer to a cancel they already left is not
+  // allowed to paint over it.
+  if(surfaceGen !== view) return;
+  showMallow(confirmed ? S.discarded_note : S.discard_unconfirmed, false, "");
+}
+
+/* The two to four seconds a real model call takes. Without it the page looks
+   frozen, which is what the first person to use the deployed app reported. */
+function thinking(on){
+  body.classList.toggle("busy", !!on);
+  el.waitRow.hidden = !on;
+  if(!on) return;
+  surfaceGen++;
+  stopReceiptDismiss();
+  clearTimeout(fadeTimer);
+  body.classList.add("talking");
+  el.you.classList.remove("on");
+  el.heard.hidden = true;
+  el.confirm.hidden = true;
+  el.mallowText.textContent = "";
+  el.thinkingText.textContent = S.taking_it_in;
+  el.mallow.classList.add("on");
+}
+
+/* ------------------------------------------------------------ the receipt */
+async function receipt(data, origin){
+  capture = data.capture_id;
+  captureOrigin = origin;
+  lastHeard = data.heard || "";
+  try{
+    const r = await api("/say?lang=" + encodeURIComponent(LANG), {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(data)});
+    if(!r.ok) throw new Error("receipt wording unavailable");
+    const said = await r.json();
+    if(said.food) setSprite(said.food === "carrot" ? "rabbit_carrot" : "rabbit_grass");
+    showMallow(said.line, said.unsure, lastHeard);
+  }catch(e){
+    // `/voice` has already committed. A failure in the small wording request
+    // must never turn into "cannot record" — that would tell somebody the
+    // opposite of the stored state and invite a duplicate retry.
+    showMallow(S.receipt_saved_reply_failed, false, lastHeard);
+  }
+}
+
+async function discardReceipt(){
+  const target = capture;
+  if(!target) return;
+  const view = showMallow(S.discarding_note, false, "", {persistent:true});
+  const confirmed = await tellServerToDiscard(target);
+  if(surfaceGen !== view) return;       // the person has already moved on
+  if(confirmed) capture = null;
+  showMallow(confirmed ? S.discarded_note : S.discard_unconfirmed, false, "");
+}
+
+/* Correcting appends. The person's own words come back to edit — not Mallow's
+   reading of them.
+ *
+ * 🔴 Nothing is retired here.
+ *
+ * This used to cancel the old capture the moment the button was pressed. If
+ * the person then gave up, lost the connection, said nothing the model could
+ * file, or closed the tab, the original was already out of the rollup and
+ * nothing had replaced it. The QA export from 2026-08-24 has one: a
+ * kitchen-counter record cancelled, its tombstone superseded, and no active
+ * version of that work anywhere.
+ *
+ * So this only remembers what is being corrected. The old rows are retired by
+ * the server, in the same write that files the new ones, and only if there are
+ * new ones.
+ */
+async function correct(){
+  /* 🔴 The button says "say it again", so it gives back the microphone.
+   *
+   * It used to open the text box with the transcript in it: the label promised
+   * voice and the action handed over a keyboard. For the person this is built
+   * for that is the worst possible swap — she is using her voice because her
+   * hands are full.
+   *
+   * What is kept is only the intention to replace. Nothing is retired here and
+   * nothing may be: Q-09 was a correction that retired the original the moment
+   * the button was pressed, so a person who then said nothing, lost the
+   * connection or closed the tab lost the record too. The old rows are retired
+   * by the server, in the same write that files the new ones, and only if
+   * there are new ones. */
+  surfaceGen++;
+  stopReceiptDismiss();
+  const wasTyped = captureOrigin === "text";
+  const original = lastHeard || "";
+  replacing = capture || null;
+  capture = null;
+  el.you.classList.remove("on");
+  el.heard.hidden = true;
+  el.confirm.hidden = true;
+  el.mallow.classList.remove("on");
+  body.classList.remove("talking");
+  setSprite("rabbit_idle");
+
+  if(wasTyped){
+    /* 🔴 She typed it, so the way back is the text box — with what she wrote
+     * already in it, because a correction is nearly always a small edit of the
+     * same sentence, and making her retype it is the very tax Q-42 set out to
+     * remove. 🚫 The microphone is not opened here either: the route back is
+     * the one she was already using, whichever one that was. */
+    // 🔴 `showYou` owns the field's value — setting it first and calling this
+    // afterwards simply wiped it, which a browser test caught.
+    showYou(original);
+    el.note.focus({preventScroll:true});
+    try{ el.note.setSelectionRange(el.note.value.length, el.note.value.length); }
+    catch(e){}
+  }else{
+    el.note.value = "";             // no draft left behind in edit mode
+    el.note.blur();                 // and no keyboard left up on a phone
+    // 🔴 The microphone is not opened here. It stays a gesture: the next thing
+    // that happens is the person pressing the rabbit, exactly as the first time.
+    micHint("again");
+    el.hold.focus({preventScroll:true});
+  }
+  stirred();
+}
+
+let typedFor = "";       // which note the current captureId belongs to
+
+async function sendText(){
+  const note = el.note.value.trim();
+  if(!note) return;
+  if(inFlight) return;              // one request at a time; a second tap waits
+
+  // 🔴 One id per note, reused if this has to be tried again.
+  //
+  // The id used to be minted here, so pressing the button twice was two
+  // captures as far as the server could tell, and its replay guard — which is
+  // keyed on the id and works correctly — never saw a repeat. Two identical
+  // rows went into an append-only ledger two seconds apart on the deployed
+  // app. Changing the note is a different thing to file and gets a new id;
+  // sending the same words again after a failure is the same thing, retried.
+  if(captureId === null || typedFor !== note){
+    captureId = crypto.randomUUID();
+    typedFor = note;
+  }
+
+  inFlight = true;
+  // 🔴 The typed path waits on the same model and shows the same screen, so it
+  // gets the same way out. A cancel that worked for voice and not for typing
+  // would be a cancel the person could not rely on.
+  const mine = beginWait(captureId);
+  try{
+    const r = await api("/voice/text", {method:"POST",
+      headers:{"Content-Type":"application/json"}, signal: mine.controller.signal,
+      body:JSON.stringify(replacing ? {capture_id:captureId, note, replaces:replacing}
+                                    : {capture_id:captureId, note})});
+    const data = await r.json();
+    if(!isCurrent(mine)) return;
+    if(data.state === "discarded"){ typedFor = ""; afterDiscard(); return; }
+    if(!r.ok || data.state === "failure"){
+      showMallow(S.cannot_record, false); return;   // keep the id, and keep
+                                                    // `replacing`: still a retry
+    }
+    await receipt(data, "text");
+    captureId = null; typedFor = ""; replacing = null;
+  }catch(e){
+    if(!isCurrent(mine)) return;
+    showMallow(S.cannot_record, false);
+  }
+  finally{ if(isCurrent(mine)){ inFlight = false; thinking(false); } }
+}
+
+/* ------------------------------------------------------------------ input */
+/* 🔴 Q-20. `pressed` is what the code asks ("is a finger still down?");
+ * `pressing` on the body is what the page shows. They are set and cleared
+ * together, through here, so the glow can never outlive the press — a warmth
+ * still sitting under a lifted thumb would be the page lying about state. */
+function setPressed(on){
+  el.hold.classList.toggle("pressed", on);
+  body.classList.toggle("pressing", on);
+}
+el.hold.addEventListener("pointerdown", e => {
+  e.preventDefault();
+  // A new sentence owns the stage. A completed receipt yields immediately;
+  // it must never sit above the rabbit while the next recording begins.
+  if(el.mallow.classList.contains("on") && !body.classList.contains("busy")) quiet();
+  // 🔴 These two lines are the whole of Q-20, and their position is the fix.
+  // Everything below them can take a second; neither of these can, because
+  // both are synchronous and neither waits on the microphone.
+  setPressed(true);
+  micHint("holding");
+  wake();          // 🔴 inside the gesture, before startRec's first await
+  try{ el.hold.setPointerCapture(e.pointerId); }catch(err){}
+  startRec();
+});
+["pointerup","pointercancel","pointerleave"].forEach(ev =>
+  el.hold.addEventListener(ev, () => {
+    if(!el.hold.classList.contains("pressed")) return;
+    setPressed(false); stopRec();
+  }));
+// A keyboard cannot hold. Space toggles instead: same states, same pipeline.
+el.hold.addEventListener("keydown", e => {
+  if(e.key !== " " && e.key !== "Enter") return;
+  e.preventDefault();
+  if(el.hold.classList.contains("pressed")){ setPressed(false); stopRec(); }
+  else { setPressed(true); micHint("holding"); wake(); startRec(); }
+});
+
+el.entry.addEventListener("click", () => { stirred(); replacing = null; showYou(""); });
+el.send.addEventListener("click", sendText);
+el.cancel.addEventListener("click", quiet);
+el.stop.addEventListener("click", cancelWait);
+el.discard.addEventListener("click", discardReceipt);
+el.edit.addEventListener("click", correct);
+el.mallow.addEventListener("pointerdown", pauseReceiptDismiss);
+el.mallow.addEventListener("pointerup", resumeReceiptDismiss);
+el.mallow.addEventListener("pointercancel", resumeReceiptDismiss);
+el.mallow.addEventListener("focusin", pauseReceiptDismiss);
+el.mallow.addEventListener("focusout", () => setTimeout(() => {
+  if(!el.mallow.contains(document.activeElement)) resumeReceiptDismiss();
+}, 0));
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden) pauseReceiptDismiss(); else resumeReceiptDismiss();
+});
+el.note.addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); sendText(); }
+  if(e.key === "Escape") quiet();
+});
+
+/* -------------------------------------------------------- scheduled leaf */
+/* There is no way to make a leaf from this page, and that is the point: a leaf
+   exists because the scheduled task decided there was something to say. This only
+   asks whether one is out. */
+let visibleLeaves = [];
+let selectedLeaf = null;
+let leafTimers = [];
+const LEAF_BACKOFF = [30000, 90000, 180000, 360000, 600000, 960000];
+
+function leafKey(leaves){ return leaves.map(x => x.summary_id).join("|"); }
+function renderLeaves(leaves){
+  visibleLeaves = leaves.slice(0, 5);
+  el.leafTray.replaceChildren();
+  visibleLeaves.forEach((leaf, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "leaf-token";
+    button.dataset.summaryId = leaf.summary_id;
+    button.setAttribute("aria-label", `${el.leafTray.dataset.label} ${index + 1}`);
+    const image = document.createElement("img");
+    image.src = "/art/leaf.webp"; image.alt = ""; image.setAttribute("aria-hidden", "true");
+    button.append(image);
+    button.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); });
+    button.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation(); selectedLeaf = leaf;
+      el.cardTitle.textContent = leaf.title; el.cardBody.textContent = leaf.body;
+      el.card.classList.add("on"); el.card.setAttribute("aria-hidden","false");
+      el.cardClose.focus({preventScroll:true});
+    });
+    el.leafTray.append(button);
+  });
+  body.classList.toggle("hasleaf", visibleLeaves.length > 0);
+}
+
+async function leafCheck(){
+  try{
+    const before = leafKey(visibleLeaves);
+    const r = await api("/garden?lang=" + encodeURIComponent(LANG), {cache:"no-store"});
+    const g = await r.json();
+    const demoPill = document.getElementById("demoPill");
+    if(demoPill) demoPill.hidden = !g.demo;
+    renderLeaves(Array.isArray(g.leaves) ? g.leaves : (g.leaf ? [g.leaf] : []));
+    return leafKey(visibleLeaves) !== before;
+  }catch(e){ return false; }
+}
+el.cardClose.addEventListener("click", async () => {
+  const sid = selectedLeaf && selectedLeaf.summary_id;
+  if(!sid) return;
+  const r = await api("/garden/seen", {method:"POST", headers:{"Content-Type":"application/json"},
+                                      body:JSON.stringify({summary_id:sid})});
+  if(!r.ok) return;
+  el.card.classList.remove("on"); el.card.setAttribute("aria-hidden","true");
+  selectedLeaf = null; await leafCheck();
+  const next = el.leafTray.querySelector(".leaf-token");
+  (next || el.hold).focus({preventScroll:true});
+});
+
+function clearLeafTimers(){ leafTimers.forEach(clearTimeout); leafTimers = []; }
+async function armLeafRefresh(){
+  clearLeafTimers();
+  if(document.hidden) return;
+  try{
+    const r = await api("/settings/reflection", {cache:"no-store"});
+    if(!r.ok) return;
+    const pref = await r.json();
+    const due = Date.parse(pref.next_reflection_at || "");
+    if(pref.cadence === "off" || !Number.isFinite(due)) return;
+    const baseline = leafKey(visibleLeaves);
+    LEAF_BACKOFF.forEach(delay => {
+      const wait = due + delay - Date.now();
+      if(wait < 0 || wait > 17 * 60 * 1000) return;
+      leafTimers.push(setTimeout(async () => {
+        const changed = await leafCheck();
+        if(changed && leafKey(visibleLeaves) !== baseline) clearLeafTimers();
+      }, Math.max(0, wait)));
+    });
+  }catch(e){}
+}
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden) clearLeafTimers();
+  else leafCheck().then(armLeafRefresh);
+});
+
+/* ------------------------------------------------ reflection preferences */
+/* ---------------------------------------------------------------- settings
+ *
+ * 🔴 Two questions that used to be one.
+ *
+ *   Can this be seen and adjusted?   No identity needed.
+ *   Which workspace does it save to? An identity, and nothing less.
+ *
+ * Binding them together is what hid the button until somebody had chosen
+ * Google or anonymous, and what made a failure inside `boot()` remove it for
+ * good. So: the panel always opens. Without a workspace it opens on the
+ * product defaults, asks NOTHING of the server - no request, therefore no 401 -
+ * and says plainly that there is nowhere to save this yet.
+ */
+const PREF_DEFAULTS = {{ reflection_defaults | tojson }};
+const PENDING_KEY = "mallow.pendingReflection";
+
+/* 🔴 Session storage throws outright in some private modes, so every touch is
+   wrapped and every failure lands back on the defaults rather than on an
+   exception halfway through opening a panel. */
+function pendingPrefs(){
+  try{ return JSON.parse(sessionStorage.getItem(PENDING_KEY) || "null"); }
+  catch(e){ return null; }
+}
+function keepPending(p){ try{ sessionStorage.setItem(PENDING_KEY, JSON.stringify(p)); }catch(e){} }
+function dropPending(){ try{ sessionStorage.removeItem(PENDING_KEY); }catch(e){} }
+
+function fillSettings(p){
+  el.cadence.value = p.cadence || PREF_DEFAULTS.cadence;
+  el.reflectionTime.value = p.time_local || PREF_DEFAULTS.time_local;
+  const today = (new Date().getDay() + 6) % 7;  // JS Sunday=0; server Monday=0
+  el.weekday.value = String(p.weekday ?? today);
+  el.monthday.value = String(p.day_of_month || new Date().getDate());
+  cadenceFields();
+}
+function currentSettings(){
+  return {cadence: el.cadence.value,
+          time_local: el.reflectionTime.value,
+          timezone: deviceZone() || "Asia/Tokyo",
+          weekday: Number(el.weekday.value),
+          day_of_month: Number(el.monthday.value)};
+}
+let settingsIsOpen = false;
+let settingsLoadFailed = false;
+
+/* ------------------------------------------------------------- identity --
+ *
+ * 🔴 Two layers, and they are kept apart on purpose (戰略官, 2026-08-31).
+ *
+ *   fbState       who Firebase says this is
+ *   sessionState  whether Mallow has a navigation cookie for that person
+ *
+ * They fail separately and they must be able to say so separately. A Google
+ * popup can succeed and `/auth/session` still fail; on the anonymous path the
+ * link is by then permanent. Collapsing the two into one boolean is exactly
+ * what produced the week-long silent failure: the gate reappeared unchanged,
+ * so "Google refused" and "Mallow could not finish" looked identical, and both
+ * looked like nothing at all.
+ *
+ * 🚫 Nothing here ever re-opens a popup after Firebase has already succeeded.
+ */
+let fbState = "resolving";     // resolving | none | anonymous | google | boot_failed
+let sessionState = "idle";     // idle | creating | ready | failed
+let authBusy = false;          // a popup is open, or a session is being minted
+let authNote = "";             // what to tell the person, already translated
+let authRetryable = false;     // the only recovery is to retry the session
+let accountEmail = "";         // success must name the account it connected
+
+function setFbState(s){
+  if(fbState === s) return;
+  fbState = s;
+  renderAuth();
+}
+
+/* Firebase's own codes, turned into sentences. Anything unrecognised still
+   gets a sentence — 🚫 an unknown failure may not fall through to silence. */
+function authCodeOf(e){ return (e && e.code) || ""; }
+function authSentence(e){
+  switch(authCodeOf(e)){
+    case "auth/popup-blocked":
+    case "auth/operation-not-supported-in-this-environment":
+      return S.auth_popup_blocked;
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+    case "auth/user-cancelled":
+      return S.auth_popup_closed;
+    default:
+      return S.auth_failed;
+  }
+}
+
+function renderAuth(){
+  const atGate = fbState === "none" || fbState === "boot_failed";
+  el.gate.hidden = !atGate;
+  const ready = !!(window.Mallow.ready && window.Mallow.ready());
+  el.gGoogle.disabled = authBusy || !ready;
+  el.gAnon.disabled   = authBusy || !ready;
+
+  // The gate's own message line, and the retry that only ever retries the
+  // session — never the popup.
+  const gateNote = atGate ? authNote : "";
+  el.authMsg.textContent = gateNote;
+  el.authMsg.hidden = !gateNote;
+  el.authRetry.hidden = !(atGate && authRetryable);
+  el.authRetry.disabled = authBusy;
+
+  if(el.tempPill) el.tempPill.hidden = fbState !== "anonymous";
+  renderAccount();
+}
+
+/* The account section only ever shows what is true of the state we are in, and
+   shows nothing at all before we know. */
+function renderAccount(){
+  if(!el.accountBox) return;
+  const known = fbState === "anonymous" || fbState === "google";
+  el.accountBox.hidden = !known;
+  if(!known) return;
+
+  const anon = fbState === "anonymous";
+  el.accountBody.hidden = anon;
+  el.accountBody.textContent = anon ? ""
+    : accountEmail ? S.account_signed_as.replace("{email}", accountEmail)
+                   : S.account_google_body;
+  el.accountAnon.hidden = !anon;
+  el.accountGoogle.hidden = anon;
+  el.accountLeave.disabled = authBusy;
+  el.accountSignOut.disabled = authBusy;
+  el.accountMsg.textContent = authNote;
+  el.accountMsg.hidden = !authNote;
+  el.accountRetry.hidden = !authRetryable;
+  el.accountRetry.disabled = authBusy;
+}
+
+/* 🔴 The second half, and the only half that may be retried on its own.
+ *
+ * By the time this runs Firebase has already accepted the person. If the
+ * session cannot be minted, their identity has still changed — and on the
+ * anonymous path the link cannot be undone. So this never rolls anything back,
+ * never signs anybody out, and never re-opens a popup. It says what is true
+ * and offers the one action that can still help. */
+async function connectSession(){
+  authBusy = true; sessionState = "creating";
+  authNote = S.auth_connecting; authRetryable = false; renderAuth();
+  let ok = false;
+  try{ ok = await window.Mallow.startSession(); }catch(e){ ok = false; }
+  if(!ok){
+    authBusy = false; sessionState = "failed";
+    authNote = S.auth_session_failed; authRetryable = true; renderAuth();
+    return false;
+  }
+  sessionState = "ready";
+  if(AUTH_RETURN_TO) location.assign(AUTH_RETURN_TO);
+  else location.reload();       // 🔴 only here, and only after `ok`
+  return true;
+}
+
+/* Firebase first. A failure here leaves the identity untouched, so the person
+   can simply press again — including pressing the other button. */
+async function runAuth(start){
+  if(authBusy) return;
+  authBusy = true; authNote = ""; authRetryable = false; renderAuth();
+  try{
+    await start();
+  }catch(e){
+    authBusy = false;
+    authNote = authSentence(e);
+    authRetryable = false;      // 🚫 not a session problem; retrying it is wrong
+    renderAuth();
+    return;
+  }
+  authBusy = false;
+  await connectSession();
+}
+
+/* The only place `wsState` is written. It re-renders an open panel, which is
+   what makes the resolving window recoverable rather than merely brief. */
+function setWsState(s){
+  if(wsState === s) return;
+  wsState = s;
+  if(settingsIsOpen) renderSettings();
+}
+
+/* One mode is shown at a time, and Save is enabled only in the two modes where
+   the panel is displaying a value it would be honest to write. A disabled Save
+   is the guard that a default nobody chose cannot replace a stored schedule. */
+function showSettingsMode(mode){
+  const usable = mode === "pending" || mode === "ready";
+  el.settingsLoading.hidden = mode !== "loading";
+  el.settingsFailed.hidden  = mode !== "failed";
+  el.settingsPending.hidden = mode !== "pending";
+  el.settingsForm.hidden    = !usable;
+  el.settingsSave.disabled  = !usable;
+}
+
+async function renderSettings(){
+  if(wsState === "resolving"){ showSettingsMode("loading"); return; }
+
+  if(wsState === "none"){
+    // 🔴 No request. Before an identity exists this endpoint is a 401, and a
+    // 401 swallowed by a try/catch is not the same as a call never made.
+    fillSettings(pendingPrefs() || PREF_DEFAULTS);
+    showSettingsMode("pending");
+    return;
+  }
+
+  showSettingsMode("loading");
+  let p = null;
+  try{
+    const r = await api("/settings/reflection");
+    if(r.ok) p = await r.json();
+  }catch(e){}
+  if(!settingsIsOpen) return;          // closed while the read was in flight
+  if(!p){
+    // 🔴 Not a fallback to defaults. Showing a default here would put a value
+    // on screen that this person never chose, one Save away from their real one.
+    settingsLoadFailed = true;
+    showSettingsMode("failed");
+    return;
+  }
+  settingsLoadFailed = false;
+  fillSettings(p);
+  showSettingsMode("ready");
+}
+
+async function openSettings(){
+  settingsIsOpen = true;
+  el.settings.classList.add("on");
+  el.settings.setAttribute("aria-hidden", "false");
+  renderAccount();
+  await renderSettings();
+  (el.settingsForm.hidden ? el.settingsClose : el.cadence).focus({preventScroll:true});
+}
+
+/* Written once, when there is finally somewhere to write it.
+ *
+ * 🔴 Cleared only on a confirmed write. A failed sign-in, a dropped connection
+ * or a 401 leaves it pending rather than binding somebody's choice to the
+ * wrong uid or losing it silently. */
+async function flushPendingPrefs(){
+  const p = pendingPrefs();
+  if(!p) return;
+  try{
+    const r = await api("/settings/reflection", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(p)});
+    if(r.ok) dropPending();
+  }catch(e){}
+}
+function cadenceFields(){
+  el.weekdayRow.hidden = !["weekly","biweekly"].includes(el.cadence.value);
+  el.monthdayRow.hidden = el.cadence.value !== "monthly";
+  el.reflectionTime.disabled = el.cadence.value === "off";
+}
+el.cadence.addEventListener("change", cadenceFields);
+function closeSettings(){
+  settingsIsOpen = false;
+  el.settings.classList.remove("on");
+  el.settings.setAttribute("aria-hidden", "true");
+  el.settingsOpen.focus({preventScroll:true});
+}
+el.settingsOpen.addEventListener("click", openSettings);
+el.settingsClose.addEventListener("click", closeSettings);
+el.settingsSave.addEventListener("click", async () => {
+  // 🔴 Belt and braces. `showSettingsMode` already disables Save outside the
+  // two writable modes; this refuses the write even if something re-enables it,
+  // because the values on screen during `resolving` or after a failed read are
+  // not this person's and must never be posted as if they were.
+  if(el.settingsSave.disabled) return;
+  if(wsState === "resolving" || settingsLoadFailed) return;
+  const chosen = currentSettings();
+  // 🔴 No workspace: keep it here and say so. It is not claimed as saved,
+  // because it is not saved - it is remembered on this device until there is
+  // somewhere for it to go.
+  if(wsState !== "ready"){
+    keepPending(chosen);
+    closeSettings();
+    showMallow(S.settings_kept, false, "");
+    return;
+  }
+  try{
+    const r = await api("/settings/reflection", {method:"POST",
+      headers:{"Content-Type":"application/json"}, body:JSON.stringify(chosen)});
+    if(!r.ok) return;
+    dropPending();
+    closeSettings();
+    await leafCheck();
+    armLeafRefresh();
+    showMallow(S.settings_saved, false, "");
+  }catch(e){}
+});
+
+/* ---------------------------------------------------------------- clock */
+/* 🔴 The zone comes from the same call that `tellServerOurTimezone()` sends to
+   the server, which is what becomes `display_timezone` and prints every
+   timestamp on the records page. One expression, one hop apart: the corner
+   clock and the records page cannot disagree about which city it is.
+   PRODUCT_DECISIONS 42 D-2 asked for exactly that, because the alternative —
+   a bare `new Date()` here — is how you get 18:00 in the sky above a record
+   that says 10:00. */
+function deviceZone(){
+  try{ return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; }
+  catch(e){ return undefined; }
+}
+function paintClock(){
+  var el = document.getElementById("clockTime"),
+      day = document.getElementById("clockDate"),
+      box = document.getElementById("clock");
+  if(!el || !day || !box) return;
+  var zone = deviceZone(), now = new Date(), time, date;
+  try{
+    time = new Intl.DateTimeFormat(S.locale_tag, {hour:"2-digit", minute:"2-digit",
+             hour12:false, timeZone:zone}).format(now);
+    /* 🔴 Compact, and produced by the formatter rather than written out here.
+       A 76px square cannot hold "Saturday, 29 August" and must not squeeze or
+       wrap it. Two short parts, joined:
+
+           8/29 · 六            Fri · 29 Aug
+
+       The order differs because the locales differ, which is the point of
+       asking the formatter instead of assembling a string by hand. */
+    var wd = new Intl.DateTimeFormat(S.locale_tag,
+               {weekday: S.clock_weekday, timeZone: zone}).format(now),
+        md = new Intl.DateTimeFormat(S.locale_tag,
+               {month: S.clock_month, day:"numeric", timeZone: zone}).format(now);
+    date = S.clock_order === "weekday_first" ? wd + " \u00b7 " + md
+                                             : md + " \u00b7 " + wd;
+  }catch(e){
+    time = String(now.getHours()).padStart(2,"0") + ":" +
+           String(now.getMinutes()).padStart(2,"0");
+    date = "";
+  }
+  el.textContent = time;
+  day.textContent = date;
+  fitDate(day);
+  box.setAttribute("aria-label", S.clock_label.replace("{time}", time));
+}
+/* Shrink to fit, and only when it does not. 76px face minus 4px of air each
+   side leaves 68px; a date wider than that is scaled down about its own
+   centre rather than clipped by `overflow:hidden`. Floored at .84 so a very
+   long locale gets small rather than illegible. */
+function fitDate(node){
+  node.style.transform = "";
+  var avail = 68, w = node.scrollWidth;
+  if(w > avail) node.style.transform = "scale(" + Math.max(.84, avail / w).toFixed(3) + ")";
+}
+/* Tap to put it away. It is the sky, not a dashboard — somebody who does not
+   want a clock in their meadow should be able to say so and be believed. */
+function armClock(){
+  var box = document.getElementById("clock");
+  if(!box) return;
+  try{ if(localStorage.getItem("mallow.clock") === "off")
+         body.classList.add("clock-off"); }catch(e){}
+  paintClock();
+  box.addEventListener("click", function(){
+    var off = body.classList.toggle("clock-off");
+    try{ localStorage.setItem("mallow.clock", off ? "off" : "on"); }catch(e){}
+    if(!off) paintClock();
+  });
+  /* On the minute, not every sixty seconds from whenever the page opened. */
+  setTimeout(function tick(){
+    paintClock();
+    setTimeout(tick, 60000);
+  }, (60 - new Date().getSeconds()) * 1000 + 200);
+}
+
+/* Which clock this person is actually looking at.
+   Sent once a load, and never waited on: the records page reads it, so a
+   failure here costs a Tokyo-shaped timestamp, not a recording. */
+function tellServerOurTimezone(){
+  let zone;
+  try{ zone = Intl.DateTimeFormat().resolvedOptions().timeZone; }catch(e){ return; }
+  if(!zone) return;
+  api("/settings/display-timezone", {method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({timezone: zone})}).catch(() => {});
+}
+
+/* --------------------------------------------------------------- startup */
+// Nothing switches state until every image is decoded, or the first change
+// flashes white on a cold cache.
+Promise.all([...document.querySelectorAll(".sp[src],.bg[src]")].map(i =>
+  i.complete ? Promise.resolve() : new Promise(r => { i.onload = i.onerror = r; })
+)).then(() => { body.classList.add("ready"); loadTheRest(); });
+
+/* The night sky, the two fed rabbits and the sleeping one, in the order a
+   person actually reaches them. One at a time: they are no longer racing the
+   first frame, so there is nothing to win by starting them together, and a
+   phone on a slow connection finishes the first one sooner this way. */
+/* 🔴 Q-37 r2. This used to be a chain: one picture, then on its load event the
+   next, one at a time. Four deferred images in series is four round trips laid
+   end to end, and on a phone that is the progress bar crawling for several
+   seconds after the meadow is already on screen - the 56k feeling. Nothing was
+   gained by the queue either: these are not competing with the first frame,
+   which has already painted by the time this runs.
+
+   So they all start together and the browser's own connection pool decides the
+   order. `fetchPriority = "low"` is the part that keeps this honest: it tells
+   the browser these may yield to anything the person is actually waiting for. */
+function loadTheRest(){
+  [].slice.call(document.querySelectorAll("[data-src]")).forEach(function(el){
+    try{ el.fetchPriority = "low"; }catch(e){}
+    el.src = el.getAttribute("data-src");
+    el.removeAttribute("data-src");
+  });
+}
+
+clock(); setInterval(clock, 60000);
+armClock();
+stirred();
+
+// Identity first: the leaf and the records belong to whoever this turns out to
+// be, so nothing is fetched until that is settled.
+el.gGoogle.onclick = () => runAuth(() => window.Mallow.signInWithGoogle());
+el.gAnon.onclick   = () => runAuth(() => window.Mallow.browseAnonymously());
+// 🔴 Retries the session and nothing else. Firebase already said yes.
+el.authRetry.onclick  = () => { if(!authBusy) connectSession(); };
+el.accountRetry.onclick = () => { if(!authBusy) connectSession(); };
+async function leaveIdentity(){
+  if(authBusy) return;
+  authBusy = true; renderAuth();
+  try{
+    await window.Mallow.signOut();
+  }catch(e){
+    authBusy = false;
+    authNote = S.auth_signout_failed;
+    renderAuth();
+    return;
+  }
+  location.reload();                 // only after Firebase and the cookie agree
+}
+el.accountLeave.onclick = leaveIdentity;
+el.accountSignOut.onclick = leaveIdentity;
+
+window.Mallow.boot().then(async state => {
+  if (el.tempPill)
+    el.tempPill.title = state.mode === "local" ? S.temp_pill_local : S.temp_pill_anon;
+
+  const cfg = await window.Mallow.config();
+  if (!state.signedIn && cfg.auth_required) {
+    // Resolved, and the answer is that there is no workspace yet. Different
+    // fact from "still resolving", and the panel says a different sentence.
+    setFbState("none");
+    setWsState("none");
+    return;
+  }
+  // 🔴 `local` is its own answer, not a kind of anonymous: it is a deployment
+  // with no Firebase project at all. Offering "sign in with Google" there
+  // would be a button that cannot work, so the account section stays away.
+  accountEmail = state.email || "";
+  setFbState(state.mode === "local" ? "local"
+             : state.anonymous ? "anonymous" : "google");
+  const sessionFailed = state.mode !== "local" && state.sessionReady === false;
+  if(sessionFailed){
+    sessionState = "failed";
+    authNote = S.auth_session_failed;
+    authRetryable = true;
+    renderAuth();
+  }else{
+    sessionState = "ready";
+  }
+  // 🔴 From here there is a uid, so a preference finally has somewhere to go.
+  setWsState("ready");
+  await flushPendingPrefs();          // whatever was chosen before the door
+  tellServerOurTimezone();
+  await leafCheck();
+  armLeafRefresh();
+  // A restored Firebase identity whose navigation cookie could not be minted
+  // is not "ready". Put the recovery control on screen instead of waiting for
+  // the first 401 navigation to explain the state indirectly.
+  if(sessionFailed) await openSettings();
+}).catch(async () => {
+  /* 🔴 `boot()` failed. That is not the same as "there is no identity here".
+   *
+   * On a deployment with no Firebase project the server mints local identities
+   * and every private endpoint works perfectly well; on a real one they are
+   * all 401. This branch used to call `leafCheck()` and `armLeafRefresh()`
+   * unconditionally, so a phone that could not reach Firebase fired two
+   * private requests and collected two 401s on every single page load - the
+   * same defect the settings panel was ruled on for.
+   *
+   * `auth_required` is the public answer to exactly this question, so it is
+   * the one thing asked before anything private is touched. */
+  let local = false;
+  try{ local = !(await window.Mallow.config()).auth_required; }catch(e){}
+  if(!local){
+    // 🔴 Distinct from `none`: there may well be an identity, we simply could
+    // not reach Firebase to find out. The gate is shown because it is the only
+    // usable thing left, and the failure gets a sentence rather than silence.
+    setFbState("boot_failed");
+    authNote = S.auth_failed; renderAuth();
+    setWsState("none");
+    return;
+  }
+  setFbState("local");
+  setWsState("ready");
+  await flushPendingPrefs();
+  await leafCheck();
+  armLeafRefresh();
+});
+["pointerdown","keydown"].forEach(ev => addEventListener(ev, stirred, {passive:true}));
+if("serviceWorker" in navigator) addEventListener("load", () =>
+  navigator.serviceWorker.register("/sw.js").catch(() => {}));
+</script>
+</body>
+</html>

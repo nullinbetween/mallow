@@ -1,0 +1,63 @@
+# Written before the first `git add`, which is the gate that matters: a rule
+# added after a file is tracked has no effect on it.
+
+# The retired engine and the contaminated corpus were archived outside this
+# repository on 2026-08-22 and are no longer present. These rules stay as a
+# backstop in case anything is ever restored by accident.
+_retired_contaminated/
+scenario/
+app/
+core/
+policy/
+tools/
+mallow_preview.html
+run_local_demo.sh
+
+# Credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*-key.json
+*credentials*.json
+service-account*.json
+.gcloud/
+.config/gcloud/
+.firebase/
+
+# Caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.DS_Store
+*.log
+
+# Full-resolution art masters stay on the Owner's machine. The nine approved,
+# quantised runtime files live one directory above and keep the same names.
+assets/art/Original/
+
+# 🔴 The live journal — a person's own records.
+#
+# The rule here used to be `data/out/`, the generated-corpus directory of a
+# retired design. It is not the directory the product writes to; that is
+# `data/live/`, and it was never covered. Three documents have said since
+# 2026-08-22 that all three ignore files excluded it. They did not. Fixed
+# 2026-08-23 by excluding the whole tree, which cannot drift the same way again.
+data/
+
+# The demo seeder is COMMITTED, on purpose (戰略官 2026-08-23): a judge who
+# cannot reproduce the autonomous leaf cannot verify the one thing this
+# submission is about. `demo/seed.py` is a clean synthetic script and nothing
+# else lives in there; what it *produces* goes to `data/`, which is ignored
+# above. The Dockerfile's explicit COPY list keeps it out of the image without
+# needing a rule here.
+
+# The visual QA package — roughly 53MB of screenshots that settled the
+# registration numbers (PRODUCT_DECISIONS 25: kept on the machine, out of the
+# submission repository). The report itself is small and worth keeping.
+qa/*
+!qa/QA_REPORT.md

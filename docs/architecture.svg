@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="980" viewBox="0 0 1120 980" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4a5a66"/>
+    </marker>
+    <marker id="ared" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b03636"/>
+    </marker>
+  </defs>
+
+  <rect width="1120" height="980" fill="#ffffff"/>
+  <rect x="0.5" y="0.5" width="1119" height="979" fill="none" stroke="#dde3e7"/>
+
+  <text x="36" y="46" font-size="23" font-weight="700" fill="#1c2b33">Mallow — architecture</text>
+  <text x="36" y="70" font-size="13.5" fill="#5b6b76">Voice-first tracker for uncounted household labour · Cloud Run · Gemini API in Vertex AI · Firestore · Cloud Scheduler</text>
+
+  <!-- ============ LANE A : CAPTURE ============ -->
+  <text x="36" y="112" font-size="12" font-weight="700" fill="#8a97a1" letter-spacing="1.4">1 · CAPTURE — WHAT THE PERSON STARTS</text>
+
+  <rect x="36" y="126" width="186" height="128" rx="10" fill="#f4f7f9" stroke="#c3ced6"/>
+  <text x="52" y="150" font-size="13.5" font-weight="700" fill="#1c2b33">Browser · 390×844</text>
+  <text x="52" y="171" font-size="11.5" fill="#4a5a66">hold the rabbit → record</text>
+  <text x="52" y="189" font-size="11.5" fill="#4a5a66">or type a sentence</text>
+  <text x="52" y="214" font-size="11.5" font-weight="600" fill="#b03636">energy gate runs here</text>
+  <text x="52" y="231" font-size="11" fill="#5b6b76">silence is never sent —</text>
+  <text x="52" y="245" font-size="11" fill="#5b6b76">no request, not a discarded one</text>
+
+
+  <rect x="36" y="268" width="186" height="70" rx="10" fill="#eef4f8" stroke="#b6c7d2" stroke-dasharray="4 3"/>
+  <text x="52" y="290" font-size="12" font-weight="700" fill="#1c2b33">Firebase Authentication</text>
+  <text x="52" y="308" font-size="11" fill="#4a5a66">the browser obtains an ID token</text>
+  <text x="52" y="325" font-size="11" font-weight="600" fill="#b03636">identity only — no records</text>
+  <line x1="129" y1="256" x2="129" y2="266" stroke="#9fb0bb" stroke-width="1.4" stroke-dasharray="3 2"/>
+  <line x1="228" y1="190" x2="270" y2="190" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="276" y="126" width="470" height="408" rx="12" fill="#fbfcfd" stroke="#9fb0bb" stroke-width="1.6"/>
+  <text x="294" y="150" font-size="13.5" font-weight="700" fill="#1c2b33">Cloud Run · Flask (asia-northeast1)</text>
+
+  <rect x="294" y="164" width="434" height="52" rx="8" fill="#eef4f8" stroke="#b6c7d2"/>
+  <text x="308" y="185" font-size="12.5" font-weight="600" fill="#1c2b33">Firebase Authentication — verify ID token</text>
+  <text x="308" y="203" font-size="11" fill="#4a5a66">one verified uid per request · never from a header, cookie or query parameter</text>
+
+  <rect x="294" y="228" width="434" height="76" rx="8" fill="#fdf6e8" stroke="#d7a94a" stroke-dasharray="5 3" stroke-width="1.6"/>
+  <text x="308" y="249" font-size="12.5" font-weight="700" fill="#8a6410">call out to Gemini API in Vertex AI — PROPOSES CANDIDATE FACTS</text>
+  <text x="308" y="268" font-size="11" fill="#6b5416">returns candidate events — including labour_kind — under a strict schema</text>
+  <text x="308" y="284" font-size="11" fill="#6b5416">every source_text must be a contiguous span the person actually said —</text>
+  <text x="308" y="298" font-size="11" fill="#6b5416">a paraphrase is rejected, not repaired</text>
+
+  <line x1="511" y1="304" x2="511" y2="322" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="294" y="326" width="434" height="88" rx="8" fill="#eaf5ec" stroke="#4e8f5f" stroke-width="2"/>
+  <text x="308" y="347" font-size="12.5" font-weight="700" fill="#2f6b3f">policy.py — DETERMINISTIC. THIS IS WHAT DECIDES.</text>
+  <text x="308" y="368" font-size="11.5" fill="#3c5c45">invisible_chore → <tspan font-weight="700">grass</tspan>    ·    mental_load → <tspan font-weight="700">carrot</tspan></text>
+  <text x="308" y="385" font-size="11.5" fill="#3c5c45">recognised_work → recorded, no food    ·    unknown → withheld</text>
+  <text x="308" y="402" font-size="11.5" font-weight="700" fill="#2f6b3f">duration_minutes is NOT an input to this decision</text>
+
+  <line x1="511" y1="414" x2="511" y2="432" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="294" y="436" width="434" height="80" rx="8" fill="#eef4f8" stroke="#b6c7d2"/>
+  <text x="308" y="457" font-size="12.5" font-weight="600" fill="#1c2b33">ledger.py — append-only journal</text>
+  <text x="308" y="475" font-size="11" fill="#4a5a66">a row may move to cancelled or superseded. It is never edited.</text>
+  <text x="308" y="491" font-size="11" fill="#4a5a66">withdrawing a capture retires the whole utterance and every event derived</text>
+  <text x="308" y="506" font-size="11" fill="#4a5a66">from it, from every read surface — the audit trail underneath survives</text>
+
+  <line x1="752" y1="320" x2="800" y2="320" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="806" y="248" width="278" height="146" rx="10" fill="#f4f7f9" stroke="#c3ced6"/>
+  <text x="822" y="272" font-size="13.5" font-weight="700" fill="#1c2b33">Firestore</text>
+  <text x="822" y="294" font-size="11.5" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#4a5a66">users/{uid}/records</text>
+  <text x="822" y="312" font-size="11.5" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#4a5a66">users/{uid}/captures</text>
+  <text x="822" y="330" font-size="11.5" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#4a5a66">users/{uid}/summaries</text>
+  <text x="822" y="348" font-size="11.5" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#4a5a66">users/{uid}/garden</text>
+  <text x="822" y="372" font-size="11" fill="#b03636">deny-all client Rules — server access only</text>
+
+  <text x="806" y="150" font-size="12" font-weight="700" fill="#b03636">Audio is never stored.</text>
+  <text x="806" y="169" font-size="11" fill="#5b6b76">The recording goes to the model</text>
+  <text x="806" y="184" font-size="11" fill="#5b6b76">and is not persisted anywhere.</text>
+  <text x="806" y="206" font-size="11" fill="#5b6b76">The transcript is kept as said —</text>
+  <text x="806" y="221" font-size="11" fill="#5b6b76">never rewritten or translated.</text>
+
+  <!-- ============ LANE B : AUTONOMY ============ -->
+  <text x="36" y="572" font-size="12" font-weight="700" fill="#8a97a1" letter-spacing="1.4">2 · AUTONOMY — WHAT NOBODY ASKED FOR</text>
+
+  <rect x="36" y="586" width="186" height="86" rx="10" fill="#f4f7f9" stroke="#c3ced6"/>
+  <text x="52" y="610" font-size="13" font-weight="700" fill="#1c2b33">Cloud Scheduler</text>
+  <text x="52" y="631" font-size="11.5" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" fill="#4a5a66">* * * * *  — every minute</text>
+  <text x="52" y="651" font-size="11" fill="#5b6b76">each workspace keeps its</text>
+  <text x="52" y="665" font-size="11" fill="#5b6b76">own chosen cadence</text>
+
+  <line x1="228" y1="622" x2="284" y2="622" stroke="#b03636" stroke-width="2" marker-end="url(#ared)"/>
+  <text x="234" y="614" font-size="10.5" font-weight="700" fill="#b03636">OIDC</text>
+
+  <rect x="290" y="586" width="212" height="86" rx="10" fill="#fdeeee" stroke="#b03636" stroke-width="2"/>
+  <text x="304" y="609" font-size="12.5" font-weight="700" fill="#b03636">/tasks/reflections</text>
+  <text x="304" y="628" font-size="11" fill="#7a3232">accepts only a token minted for</text>
+  <text x="304" y="643" font-size="11" fill="#7a3232">Scheduler's own service account</text>
+  <text x="304" y="662" font-size="11" font-weight="600" fill="#7a3232">issuer + audience both checked</text>
+
+  <line x1="508" y1="622" x2="546" y2="622" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="552" y="562" width="248" height="134" rx="10" fill="#f4f7f9" stroke="#c3ced6"/>
+  <text x="566" y="584" font-size="12.5" font-weight="700" fill="#1c2b33">three deterministic gates</text>
+  <text x="566" y="606" font-size="11" fill="#4a5a66">1 · is reflection switched on?</text>
+  <text x="566" y="623" font-size="11" fill="#4a5a66">2 · is this workspace due?</text>
+  <text x="566" y="640" font-size="11" fill="#4a5a66">3 · anything new since last time?</text>
+  <text x="566" y="657" font-size="11" fill="#4a5a66">then → assemble a bounded fact pack</text>
+  <text x="566" y="681" font-size="11" font-weight="600" fill="#2f6b3f">durations are never consulted</text>
+
+  <line x1="806" y1="622" x2="844" y2="622" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="850" y="562" width="234" height="66" rx="8" fill="#fdf6e8" stroke="#d7a94a" stroke-dasharray="5 3" stroke-width="1.6"/>
+  <text x="864" y="584" font-size="12" font-weight="700" fill="#8a6410">Gemini API in Vertex AI — writes</text>
+  <text x="864" y="602" font-size="11" fill="#6b5416">2–3 sentences from the fact pack</text>
+  <text x="864" y="617" font-size="11" fill="#6b5416">only — it never reads the store</text>
+
+  <line x1="967" y1="628" x2="967" y2="646" stroke="#4a5a66" stroke-width="1.6" marker-end="url(#a)"/>
+
+  <rect x="850" y="650" width="234" height="80" rx="8" fill="#eaf5ec" stroke="#4e8f5f" stroke-width="2"/>
+  <text x="864" y="671" font-size="12" font-weight="700" fill="#2f6b3f">validator — deterministic</text>
+  <text x="864" y="689" font-size="11" fill="#3c5c45">cites a record you do not have → discard</text>
+  <text x="864" y="705" font-size="11" fill="#3c5c45">diagnoses or quantifies you → discard</text>
+  <text x="864" y="722" font-size="11" font-weight="700" fill="#2f6b3f">otherwise → one folded leaf</text>
+
+  <rect x="36" y="706" width="760" height="76" rx="10" fill="#fdeeee" stroke="#b03636" stroke-dasharray="4 3"/>
+  <text x="52" y="729" font-size="12.5" font-weight="700" fill="#b03636">Two doors. Different keys. This is the whole autonomy argument.</text>
+  <text x="52" y="748" font-size="11" fill="#7a3232">A user's Firebase token opens /voice, /records, /export — and cannot open /tasks/reflections. Verified on the deployed</text>
+  <text x="52" y="765" font-size="11" fill="#7a3232">service: no credential, a retired task key, and an identity token minted for the project owner each receive 403.</text>
+
+  <!-- ============ LANE C : WHERE DATA GOES ============ -->
+  <text x="36" y="812" font-size="12" font-weight="700" fill="#8a97a1" letter-spacing="1.4">3 · WHERE DATA GOES — EVERY DESTINATION, NAMED</text>
+
+  <rect x="36" y="826" width="336" height="98" rx="10" fill="#fdf6e8" stroke="#d7a94a"/>
+  <text x="52" y="848" font-size="12.5" font-weight="700" fill="#8a6410">Vertex AI · Gemini 3.7 Flash</text>
+  <text x="52" y="868" font-size="11" fill="#6b5416">capture input (audio or text) for extraction,</text>
+  <text x="52" y="884" font-size="11" fill="#6b5416">and reflection fact packs for the weekly note.</text>
+  <text x="52" y="906" font-size="11" font-weight="600" fill="#8a6410">Inside Mallow&#39;s own Google Cloud project.</text>
+
+  <rect x="390" y="826" width="336" height="98" rx="10" fill="#eef4f8" stroke="#b6c7d2"/>
+  <text x="406" y="848" font-size="12.5" font-weight="700" fill="#1c2b33">Firebase Authentication</text>
+  <text x="406" y="868" font-size="11" fill="#4a5a66">sign-in only. Issues and verifies the token</text>
+  <text x="406" y="884" font-size="11" fill="#4a5a66">that resolves to one uid.</text>
+  <text x="406" y="906" font-size="11" font-weight="600" fill="#b03636">No record is stored here. It is not the database.</text>
+
+  <rect x="744" y="826" width="340" height="98" rx="10" fill="#eaf5ec" stroke="#4e8f5f"/>
+  <text x="760" y="848" font-size="12.5" font-weight="700" fill="#2f6b3f">Local export — PDF · CSV · JSON</text>
+  <text x="760" y="868" font-size="11" fill="#3c5c45">generated only when the person asks,</text>
+  <text x="760" y="884" font-size="11" fill="#3c5c45">their own copy, on their own device.</text>
+  <text x="760" y="906" font-size="11" font-weight="600" fill="#2f6b3f">Generated locally. Nothing is uploaded to produce them.</text>
+
+  <rect x="36" y="936" width="1048" height="30" rx="8" fill="#f4f7f9" stroke="#c3ced6"/>
+  <text x="52" y="956" font-size="11.5" fill="#1c2b33"><tspan font-weight="700">No user record is sent to an unrelated third-party destination.</tspan>  The scheduled loop calls Vertex AI inside this project; no analytics, no telemetry, no sync service.</text>
+
+</svg>
